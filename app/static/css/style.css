@@ -1,0 +1,210 @@
+/* SynthArbiter Custom Styles */
+
+:root {
+    --primary-green: #76b900;
+    --dark-bg: #111827;
+    --darker-bg: #0f172a;
+    --card-bg: #1f2937;
+    --text-primary: #f9fafb;
+    --text-secondary: #9ca3af;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+    background: var(--darker-bg);
+    color: var(--text-primary);
+}
+
+/* Animations */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.fade-in {
+    animation: fadeIn 0.5s ease-out;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+}
+
+.loading-pulse {
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--dark-bg);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--card-bg);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #374151;
+}
+
+/* Button styles */
+.btn {
+    transition: all 0.2s ease;
+    cursor: pointer;
+    border-radius: 0.5rem;
+    font-weight: 600;
+    padding: 0.75rem 1.5rem;
+}
+
+.btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 10px 20px rgba(118, 185, 0, 0.3);
+}
+
+.btn:active {
+    transform: translateY(0);
+}
+
+/* Card styles */
+.card {
+    background: var(--card-bg);
+    border-radius: 0.75rem;
+    padding: 1.5rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+    transition: all 0.3s ease;
+}
+
+.card:hover {
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.16);
+}
+
+/* Recommendation card */
+.recommendation-card {
+    background: linear-gradient(135deg, #065f46 0%, #047857 100%);
+    border-left: 4px solid var(--primary-green);
+}
+
+/* Input styles */
+input, textarea, select {
+    background: #374151;
+    border: 1px solid #4b5563;
+    color: var(--text-primary);
+    transition: all 0.2s ease;
+}
+
+input:focus, textarea:focus, select:focus {
+    outline: none;
+    border-color: var(--primary-green);
+    box-shadow: 0 0 0 3px rgba(118, 185, 0, 0.1);
+}
+
+/* Reasoning timeline steps */
+.reasoning-step {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    padding: 1rem;
+    border-radius: 0.5rem;
+    background: #374151;
+    transition: all 0.3s ease;
+}
+
+.reasoning-step:hover {
+    background: #4b5563;
+    transform: translateX(4px);
+}
+
+.step-number {
+    flex-shrink: 0;
+    width: 2rem;
+    height: 2rem;
+    background: var(--primary-green);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+}
+
+/* Chart container */
+.chart-container {
+    position: relative;
+    height: 400px;
+    padding: 1rem;
+}
+
+/* Loading spinner */
+.spinner {
+    border: 3px solid rgba(118, 185, 0, 0.1);
+    border-top-color: var(--primary-green);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Outcome cards */
+.outcome-card {
+    border-left: 4px solid #3b82f6;
+    background: #1e3a5f;
+    padding: 1rem;
+    border-radius: 0.5rem;
+    margin-bottom: 0.75rem;
+    transition: all 0.3s ease;
+}
+
+.outcome-card:hover {
+    border-left-color: var(--primary-green);
+    background: #1e4a6f;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .container {
+        padding: 1rem;
+    }
+    
+    .card {
+        padding: 1rem;
+    }
+    
+    .chart-container {
+        height: 300px;
+    }
+}
+
+/* Print styles */
+@media print {
+    body {
+        background: white;
+        color: black;
+    }
+    
+    .card {
+        background: white;
+        border: 1px solid #ccc;
+    }
+}
+

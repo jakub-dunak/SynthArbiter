@@ -1,0 +1,36 @@
+sources:
+  - name: Stanford Encyclopedia of Philosophy
+    license: CC BY-NC-ND 4.0 (non-commercial allowed for research)
+    base_url: https://plato.stanford.edu
+    robots_txt: https://plato.stanford.edu/robots.txt
+    allowed: true
+    rate_limit: 1
+    target_articles:
+      - /entries/consciousness
+      - /entries/artificial-intelligence
+      - /entries/ethics-ai
+      - /entries/person
+      - /entries/animal-consciousness
+  
+  - name: arXiv AI Ethics Papers
+    license: Various open-access (check per-paper)
+    api: https://arxiv.org/api/query
+    rate_limit: 3
+    allowed: true
+    search_query: cat:cs.AI AND (ethics OR consciousness OR mind)
+    max_results: 100
+  
+  - name: Public Bioethics Case Studies
+    license: Public domain government publications
+    source: NIH Bioethics Resources
+    url: https://bioethics.od.nih.gov/
+    rate_limit: 1
+    allowed: true
+    section: case-studies
+
+compliance:
+  user_agent: "SynthArbiter/1.0 (Research; Contact: support@example.com)"
+  rate_limiting_enabled: true
+  respect_robots_txt: true
+  store_attribution: true
+

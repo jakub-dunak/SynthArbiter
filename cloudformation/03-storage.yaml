@@ -1,0 +1,189 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'SynthArbiter - Storage Layer'
+
+Resources:
+  # S3 Buckets
+  DataRawBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'syntharbiter-data-raw-${AWS::AccountId}'
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: TransitionToIA
+            Status: Enabled
+            Transitions:
+              - TransitionInDays: 30
+                StorageClass: STANDARD_IA
+
+  DataCuratedBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'syntharbiter-data-curated-${AWS::AccountId}'
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  EmbeddingsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'syntharbiter-embeddings-${AWS::AccountId}'
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  LogsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'syntharbiter-logs-${AWS::AccountId}'
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldLogs
+            Status: Enabled
+            ExpirationInDays: 90
+
+  # DynamoDB Table
+  AnalysisHistoryTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: SynthArbiterAnalysisHistory
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: analysisId
+          AttributeType: S
+        - AttributeName: timestamp
+          AttributeType: N
+      KeySchema:
+        - AttributeName: analysisId
+          KeyType: HASH
+        - AttributeName: timestamp
+          KeyType: RANGE
+      SSESpecification:
+        SSEEnabled: true
+
+  # OpenSearch Domain
+  OpenSearchDomain:
+    Type: AWS::OpenSearch::Domain
+    Properties:
+      DomainName: syntharbiter-opensearch
+      ClusterConfig:
+        InstanceType: t3.medium.search
+        InstanceCount: 3
+        DedicatedMasterEnabled: false
+      EBSOptions:
+        EBSEnabled: true
+        VolumeType: gp3
+        VolumeSize: 20
+      VPCOptions:
+        SecurityGroupIds:
+          - !ImportValue
+            'Fn::Sub': '${NETWORK_STACK_NAME}-OpenSearchSecurityGroupId'
+        SubnetIds:
+          - !Split
+              - ','
+              - !ImportValue
+                'Fn::Sub': '${NETWORK_STACK_NAME}-PrivateSubnetIds'
+      EngineVersion: OpenSearch_2.13
+      NodeToNodeEncryptionOptions:
+        Enabled: true
+      EncryptionAtRestOptions:
+        Enabled: true
+        KmsKeyId: alias/aws/es
+      DomainEndpointOptions:
+        EnforceHTTPS: true
+        TLSSecurityPolicy: Policy-Min-TLS-1-2-2019-07
+      AdvancedSecurityOptions:
+        Enabled: false
+      AccessPolicies:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: '*'
+            Action: 'es:*'
+            Resource: !Sub 'arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/syntharbiter-opensearch/*'
+            Condition:
+              IpAddress:
+                'aws:SourceIp':
+                  - '10.0.0.0/16'
+
+Outputs:
+  DataRawBucketName:
+    Description: Raw data bucket name
+    Value: !Ref DataRawBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-DataRawBucket'
+
+  DataCuratedBucketName:
+    Description: Curated data bucket name
+    Value: !Ref DataCuratedBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-DataCuratedBucket'
+
+  EmbeddingsBucketName:
+    Description: Embeddings bucket name
+    Value: !Ref EmbeddingsBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-EmbeddingsBucket'
+
+  LogsBucketName:
+    Description: Logs bucket name
+    Value: !Ref LogsBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-LogsBucket'
+
+  OpenSearchEndpoint:
+    Description: OpenSearch endpoint
+    Value: !GetAtt OpenSearchDomain.DomainEndpoint
+    Export:
+      Name: !Sub '${AWS::StackName}-OpenSearchEndpoint'
+
+  OpenSearchARN:
+    Description: OpenSearch domain ARN
+    Value: !GetAtt OpenSearchDomain.DomainArn
+    Export:
+      Name: !Sub '${AWS::StackName}-OpenSearchARN'
+
+  AnalysisHistoryTableName:
+    Description: DynamoDB table name
+    Value: !Ref AnalysisHistoryTable
+    Export:
+      Name: !Sub '${AWS::StackName}-AnalysisHistoryTable'
+

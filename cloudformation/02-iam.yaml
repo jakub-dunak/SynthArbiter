@@ -1,0 +1,137 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'SynthArbiter - IAM & Security Layer'
+
+Resources:
+  # EKS Cluster Role
+  EKSClusterRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: eks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonEKSClusterPolicy
+      RoleName: !Sub 'SynthArbiterEKSClusterRole-${AWS::AccountId}'
+
+  # EKS Node Group Role
+  EKSNodeRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy
+        - arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy
+        - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+      RoleName: !Sub 'SynthArbiterEKSNodeRole-${AWS::AccountId}'
+
+  # IRSA for NeMo Retriever
+  NemoRetrieverRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'syntharbiter-nemo-retriever-${AWS::AccountId}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !ImportValue
+                'Fn::Sub': '${NEMO_STACK_NAME}-OIDCProviderArn'
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                'Fn::Sub': '${NEMO_STACK_NAME}:sub': system:serviceaccount:syntharbiter:nemo-retriever-sa
+                'Fn::Sub': '${NEMO_STACK_NAME}:aud': sts.amazonaws.com
+      Policies:
+        - PolicyName: OpenSearchAndS3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - es:Describe*
+                  - es:List*
+                  - es:Get*
+                  - es:ESHttpGet
+                  - es:ESHttpPost
+                  - es:ESHttpPut
+                  - es:ESHttpHead
+                Resource: !Sub 'arn:aws:es:*:${AWS::AccountId}:domain/*'
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:ListBucket
+                Resource:
+                  - !Sub 'arn:aws:s3:::syntharbiter-*/*'
+                  - !Sub 'arn:aws:s3:::syntharbiter-*'
+
+  # IRSA for Web App
+  WebAppRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'syntharbiter-web-app-${AWS::AccountId}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !ImportValue
+                'Fn::Sub': '${NEMO_STACK_NAME}-OIDCProviderArn'
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                'Fn::Sub': '${NEMO_STACK_NAME}:sub': system:serviceaccount:syntharbiter:web-app-sa
+                'Fn::Sub': '${NEMO_STACK_NAME}:aud': sts.amazonaws.com
+      Policies:
+        - PolicyName: DynamoDBAndS3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:GetItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                Resource: !Sub 'arn:aws:dynamodb:*:${AWS::AccountId}:table/SynthArbiterAnalysisHistory'
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource:
+                  - !Sub 'arn:aws:s3:::syntharbiter-data-curated-${AWS::AccountId}/*'
+
+Outputs:
+  EKSClusterRoleArn:
+    Description: EKS Cluster Role ARN
+    Value: !GetAtt EKSClusterRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-EKSClusterRoleArn'
+
+  EKSNodeRoleArn:
+    Description: EKS Node Role ARN
+    Value: !GetAtt EKSNodeRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-EKSNodeRoleArn'
+
+  NemoRetrieverRoleArn:
+    Description: NeMo Retriever Service Account Role ARN
+    Value: !GetAtt NemoRetrieverRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-NemoRetrieverRoleArn'
+
+  WebAppRoleArn:
+    Description: Web App Service Account Role ARN
+    Value: !GetAtt WebAppRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-WebAppRoleArn'
+

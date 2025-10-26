@@ -1,0 +1,125 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'SynthArbiter - Parameter Management Layer'
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, prod]
+  
+  NGCAPIKey:
+    Type: String
+    NoEcho: true
+    Description: NVIDIA NGC API Key
+
+Resources:
+  # Parameter Store entries for configuration
+  EnvParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /syntharbiter/env
+      Type: String
+      Value: !Ref Environment
+      Tier: Standard
+
+  ClusterNameParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /syntharbiter/eks/cluster-name
+      Type: String
+      Value: !Sub 'syntharbiter-cluster-${Environment}'
+      Tier: Standard
+
+  OpensearchEndpointParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /syntharbiter/opensearch/endpoint
+      Type: String
+      Value: !Sub 'vpc-syntharbiter-opensearch-${Environment}.us-east-1.es.amazonaws.com'
+      Tier: Advanced
+      AllowedPattern: ^.*$
+
+  NemoRetrieverVersionParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /syntharbiter/nemo/retriever-version
+      Type: String
+      Value: v1.0
+      Tier: Standard
+
+  NemoGuardrailsVersionParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /syntharbiter/nemo/guardrails-version
+      Type: String
+      Value: v0.8
+      Tier: Standard
+
+  NemoEvaluatorVersionParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /syntharbiter/nemo/evaluator-version
+      Type: String
+      Value: v1.0
+      Tier: Standard
+
+  NimModelVersionParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /syntharbiter/nim/model-version
+      Type: String
+      Value: llama-3.1-nemotron-nano-8B-v1
+      Tier: Standard
+
+  S3DataRawParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /syntharbiter/s3/data-raw
+      Type: String
+      Value: !Sub 'syntharbiter-data-raw-${AWS::AccountId}'
+      Tier: Standard
+
+  S3DataCuratedParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /syntharbiter/s3/data-curated
+      Type: String
+      Value: !Sub 'syntharbiter-data-curated-${AWS::AccountId}'
+      Tier: Standard
+
+  S3EmbeddingsParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /syntharbiter/s3/embeddings
+      Type: String
+      Value: !Sub 'syntharbiter-embeddings-${AWS::AccountId}'
+      Tier: Standard
+
+  S3LogsParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /syntharbiter/s3/logs
+      Type: String
+      Value: !Sub 'syntharbiter-logs-${AWS::AccountId}'
+      Tier: Standard
+
+  # Secrets Manager
+  NGCAPIKeySecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: /syntharbiter/nvidia-ngc-api-key
+      Description: NVIDIA NGC API Key for NIM microservices
+      SecretString: !Ref NGCAPIKey
+
+Outputs:
+  Environment:
+    Description: Environment name
+    Value: !Ref Environment
+    Export:
+      Name: !Sub '${AWS::StackName}-Environment'
+  
+  ClusterName:
+    Description: EKS cluster name
+    Value: !Sub 'syntharbiter-cluster-${Environment}'
+    Export:
+      Name: !Sub '${AWS::StackName}-ClusterName'
+

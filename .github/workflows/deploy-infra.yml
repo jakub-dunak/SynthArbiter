@@ -1,0 +1,106 @@
+name: Deploy Infrastructure
+
+on:
+  # push:
+  #   branches: [main]
+  #   paths: ['cloudformation/**']
+  workflow_dispatch:
+    inputs:
+      environment:
+        type: choice
+        options: [dev, prod]
+        default: dev
+      region:
+        type: choice
+        options: [us-east-1, us-west-2, eu-west-1, ap-southeast-1]
+        default: us-east-1
+        description: AWS region for deployment
+
+jobs:
+  deploy-cfn:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      AWS_REGION: ${{ github.event.inputs.region || 'us-east-1' }}
+      ENVIRONMENT: ${{ github.event.inputs.environment || 'dev' }}
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-session-name: GitHubActions-SynthArbiter
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Validate CloudFormation Templates
+        run: |
+          for template in cloudformation/*.yaml; do
+            echo "Validating $template..."
+            aws cloudformation validate-template --template-body file://$template || exit 1
+          done
+          echo "✓ All templates validated"
+      
+      - name: Deploy Parameters Stack
+        run: |
+          aws cloudformation deploy \
+            --template-file cloudformation/00-parameters.yaml \
+            --stack-name syntharbiter-parameters-${{ env.ENVIRONMENT }} \
+            --parameter-overrides NGCAPIKey="${{ secrets.NVIDIA_NGC_API_KEY }}" Environment=${{ env.ENVIRONMENT }} \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --no-fail-on-empty-changeset
+      
+      - name: Deploy Network Stack
+        run: |
+          aws cloudformation deploy \
+            --template-file cloudformation/01-network.yaml \
+            --stack-name syntharbiter-network-${{ env.ENVIRONMENT }} \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --no-fail-on-empty-changeset
+      
+      - name: Deploy IAM Stack
+        run: |
+          aws cloudformation deploy \
+            --template-file cloudformation/02-iam.yaml \
+            --stack-name syntharbiter-iam-${{ env.ENVIRONMENT }} \
+            --parameter-overrides NEMO_STACK_NAME=syntharbiter-opensearch-${{ env.ENVIRONMENT }} NETWORK_STACK_NAME=syntharbiter-network-${{ env.ENVIRONMENT }} \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --no-fail-on-empty-changeset
+      
+      - name: Deploy Storage Stack
+        run: |
+          aws cloudformation deploy \
+            --template-file cloudformation/03-storage.yaml \
+            --stack-name syntharbiter-storage-${{ env.ENVIRONMENT }} \
+            --parameter-overrides NETWORK_STACK_NAME=syntharbiter-network-${{ env.ENVIRONMENT }} \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --no-fail-on-empty-changeset
+      
+      - name: Deploy EKS Stack
+        run: |
+          aws cloudformation deploy \
+            --template-file cloudformation/04-eks.yaml \
+            --stack-name syntharbiter-eks-${{ env.ENVIRONMENT }} \
+            --parameter-overrides ClusterName=syntharbiter-cluster IAM_STACK_NAME=syntharbiter-iam-${{ env.ENVIRONMENT }} NETWORK_STACK_NAME=syntharbiter-network-${{ env.ENVIRONMENT }} \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --no-fail-on-empty-changeset
+      
+      - name: Deploy Application Stack
+        run: |
+          aws cloudformation deploy \
+            --template-file cloudformation/06-application.yaml \
+            --stack-name syntharbiter-app-${{ env.ENVIRONMENT }} \
+            --no-fail-on-empty-changeset
+      
+      - name: Output Deployment Info
+        run: |
+          echo "Deployment completed for environment: ${{ env.ENVIRONMENT }}"
+          aws cloudformation describe-stacks --stack-name syntharbiter-eks-${{ env.ENVIRONMENT }} --query 'Stacks[0].Outputs' --output table
+      
+      - name: Install NVIDIA Device Plugin
+        run: |
+          kubectl apply -f https://raw.githubusercontent.com/NVIDIA/k8s-device-plugin/v0.14.5/nvidia-device-plugin.yml
+          echo "✓ NVIDIA Device Plugin installed"
+

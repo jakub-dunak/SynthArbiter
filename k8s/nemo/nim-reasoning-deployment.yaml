@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nim-reasoning
+  namespace: syntharbiter
+  labels:
+    app: nim-reasoning
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: nim-reasoning
+  template:
+    metadata:
+      labels:
+        app: nim-reasoning
+    spec:
+      serviceAccountName: nemo-retriever-sa
+      nodeSelector:
+        workload: gpu-inference
+      tolerations:
+        - key: nvidia.com/gpu
+          operator: Equal
+          value: "true"
+          effect: NoSchedule
+      containers:
+      - name: nim
+        image: nvcr.io/nvidia/nim:llama-3.1-nemotron-nano-8B-v1
+        env:
+        - name: NGC_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: nvidia-ngc-credentials
+              key: api-key
+        resources:
+          requests:
+            nvidia.com/gpu: 1
+          limits:
+            nvidia.com/gpu: 1
+        ports:
+        - containerPort: 8000
+          name: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nim-reasoning
+  namespace: syntharbiter
+spec:
+  type: ClusterIP
+  selector:
+    app: nim-reasoning
+  ports:
+  - port: 80
+    targetPort: 8000
+    protocol: TCP
+    name: http
+
