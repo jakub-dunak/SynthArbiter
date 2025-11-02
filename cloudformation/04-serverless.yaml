@@ -105,6 +105,7 @@ Resources:
       KeySchema:
         - AttributeName: analysisId
           KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
       GlobalSecondaryIndexes:
         - IndexName: UserTimestampIndex
           KeySchema:
@@ -114,8 +115,6 @@ Resources:
               KeyType: RANGE
           Projection:
             ProjectionType: ALL
-          BillingMode: PAY_PER_REQUEST
-      BillingMode: PAY_PER_REQUEST
 
   # NIM Reasoning Microservice (Llama 3.1 Nemotron Nano)
   NIMReasoningModel:
