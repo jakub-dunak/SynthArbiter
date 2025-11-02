@@ -373,9 +373,9 @@ Resources:
                 Action:
                   - sagemaker:InvokeEndpoint
                 Resource:
-                  - !GetAtt NIMReasoningEndpoint.Arn
-                  - !GetAtt NIMGuardrailsEndpoint.Arn
-                  - !GetAtt NIMEvaluatorEndpoint.Arn
+                  - !Sub 'arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:endpoint/${NIMReasoningEndpoint}'
+                  - !Sub 'arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:endpoint/${NIMGuardrailsEndpoint}'
+                  - !Sub 'arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:endpoint/${NIMEvaluatorEndpoint}'
 
   SageMakerExecutionRole:
     Type: AWS::IAM::Role
