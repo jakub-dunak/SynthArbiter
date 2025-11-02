@@ -1,0 +1,114 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'SynthArbiter - Amplify Hosting (Manual S3 Upload) + Cognito Auth'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    Description: Environment name (dev/prod)
+  AppName:
+    Type: String
+    Default: syntharbiter-frontend
+    Description: Amplify App name
+
+Resources:
+  # ---------------------- Cognito ----------------------
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub syntharbiter-users-${Environment}
+      AutoVerifiedAttributes:
+        - email
+      UsernameAttributes:
+        - email
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: false
+          RequireUppercase: true
+      AccountRecoverySetting:
+        RecoveryMechanisms:
+          - Name: verified_email
+            Priority: 1
+
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      UserPoolId: !Ref UserPool
+      ClientName: syntharbiter-web
+      GenerateSecret: false
+      ExplicitAuthFlows:
+        - ALLOW_USER_PASSWORD_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+        - ALLOW_USER_SRP_AUTH
+      SupportedIdentityProviders:
+        - COGNITO
+
+  # ---------------------- Amplify (Manual Upload) ----------------------
+  AmplifyServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: amplify.amazonaws.com
+            Action: sts:AssumeRole
+      Path: '/'
+      Policies:
+        - PolicyName: AmplifyBasicAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:*
+                  - cloudfront:CreateInvalidation
+                  - cloudfront:GetDistribution*
+                  - cloudfront:ListDistributions
+                Resource: '*'
+
+  AmplifyApp:
+    Type: AWS::Amplify::App
+    Properties:
+      Name: !Sub ${AppName}-${Environment}
+      Description: SynthArbiter static frontend hosted on Amplify (manual S3 upload)
+      Platform: WEB
+      IAMServiceRole: !GetAtt AmplifyServiceRole.Arn
+
+  AmplifyBranch:
+    Type: AWS::Amplify::Branch
+    Properties:
+      AppId: !GetAtt AmplifyApp.AppId
+      BranchName: manual
+      EnableAutoBuild: false  # Manual deployment only
+
+Outputs:
+  AmplifyAppId:
+    Description: Amplify App ID
+    Value: !GetAtt AmplifyApp.AppId
+    Export:
+      Name: !Sub '${AWS::StackName}-AmplifyAppId'
+  AmplifyDefaultDomain:
+    Description: Default Amplify domain
+    Value: !GetAtt AmplifyApp.DefaultDomain
+    Export:
+      Name: !Sub '${AWS::StackName}-AmplifyDefaultDomain'
+  BranchUrl:
+    Description: Deployed branch URL
+    Value: !Sub 'https://manual.${AmplifyApp.DefaultDomain}'
+    Export:
+      Name: !Sub '${AWS::StackName}-BranchUrl'
+  UserPoolId:
+    Description: Cognito User Pool ID
+    Value: !Ref UserPool
+    Export:
+      Name: !Sub '${AWS::StackName}-UserPoolId'
+  UserPoolClientId:
+    Description: Cognito User Pool Web Client ID
+    Value: !Ref UserPoolClient
+    Export:
+      Name: !Sub '${AWS::StackName}-UserPoolClientId'

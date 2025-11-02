@@ -264,7 +264,7 @@ sequenceDiagram
 **OpenSearch:**
 - 3-node cluster (t3.medium.search)
 - k-NN plugin enabled (HNSW algorithm)
-- 768-dimensional embeddings
+- 2048-dimensional embeddings (llama-3.2-nv-embedqa-1b-v2)
 - IAM-based authentication
 
 ## Monitoring

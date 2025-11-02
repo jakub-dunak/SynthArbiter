@@ -63,7 +63,7 @@ class VectorStore:
                 "properties": {
                     "embedding": {
                         "type": "knn_vector",
-                        "dimension": 768,
+                        "dimension": 2048,
                         "method": {
                             "name": "hnsw",
                             "space_type": "cosinesimilarity",

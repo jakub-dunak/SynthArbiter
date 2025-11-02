@@ -93,6 +93,61 @@ jobs:
             --template-file cloudformation/06-application.yaml \
             --stack-name syntharbiter-app-${{ env.ENVIRONMENT }} \
             --no-fail-on-empty-changeset
+
+      - name: Deploy Frontend + Auth Stack (Amplify Manual + Cognito)
+        env:
+          APP_NAME: syntharbiter-frontend-${{ env.ENVIRONMENT }}
+        run: |
+          aws cloudformation deploy \
+            --template-file cloudformation/06-frontend-auth.yaml \
+            --stack-name syntharbiter-frontend-auth-${{ env.ENVIRONMENT }} \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --parameter-overrides \
+              Environment=${{ env.ENVIRONMENT }} \
+              AppName="$APP_NAME" \
+            --no-fail-on-empty-changeset
+
+      - name: Build and Deploy Frontend to Amplify S3
+        run: |
+          # Get Amplify app outputs
+          AMPLIFY_APP_ID=$(aws cloudformation describe-stacks --stack-name syntharbiter-frontend-auth-${{ env.ENVIRONMENT }} --query 'Stacks[0].Outputs[?OutputKey==`AmplifyAppId`].OutputValue' --output text)
+          USER_POOL_ID=$(aws cloudformation describe-stacks --stack-name syntharbiter-frontend-auth-${{ env.ENVIRONMENT }} --query 'Stacks[0].Outputs[?OutputKey==`UserPoolId`].OutputValue' --output text)
+          USER_POOL_CLIENT_ID=$(aws cloudformation describe-stacks --stack-name syntharbiter-frontend-auth-${{ env.ENVIRONMENT }} --query 'Stacks[0].Outputs[?OutputKey==`UserPoolClientId`].OutputValue' --output text)
+
+          echo "Amplify App ID: $AMPLIFY_APP_ID"
+          echo "User Pool ID: $USER_POOL_ID"
+          echo "User Pool Client ID: $USER_POOL_CLIENT_ID"
+
+          # Get S3 bucket name from Amplify app
+          S3_BUCKET=$(aws amplify get-app --app-id $AMPLIFY_APP_ID --query 'app.deploymentArtifacts' --output text)
+          echo "S3 Bucket: $S3_BUCKET"
+
+          # Build frontend
+          mkdir -p build
+          cp -r app/static/* build/ 2>/dev/null || true
+          cp app/templates/index.html build/index.html 2>/dev/null || true
+
+          # Generate config.js with Cognito details
+          cat > build/config.js << EOF
+          window.COGNITO_CONFIG = {
+            region: '${{ env.AWS_REGION }}',
+            userPoolId: '$USER_POOL_ID',
+            userPoolWebClientId: '$USER_POOL_CLIENT_ID',
+            domain: '',
+            redirectSignIn: '',
+            redirectSignOut: ''
+          };
+          EOF
+
+          # Upload to S3
+          aws s3 sync build/ s3://$S3_BUCKET/ --delete --exact-timestamps
+
+          # Create deployment
+          DEPLOYMENT_ID=$(aws amplify create-deployment --app-id $AMPLIFY_APP_ID --branch-name manual --query 'jobId' --output text)
+          echo "Deployment ID: $DEPLOYMENT_ID"
+
+          # Start deployment
+          aws amplify start-deployment --app-id $AMPLIFY_APP_ID --branch-name manual --job-id $DEPLOYMENT_ID
       
       - name: Output Deployment Info
         run: |

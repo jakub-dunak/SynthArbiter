@@ -23,12 +23,12 @@ class NeMoRetrieverClient:
     def embed_batch(self, texts: List[str]) -> List[List[float]]:
         """
         Generate embeddings for a batch of texts
-        
+
         Args:
             texts: List of text strings to embed
-            
+
         Returns:
-            List of embedding vectors (768-dimensional)
+            List of embedding vectors (2048-dimensional)
         """
         try:
             response = requests.post(
@@ -39,7 +39,7 @@ class NeMoRetrieverClient:
                 },
                 json={
                     "input": texts,
-                    "model": "nv-embed-v1"
+                    "model": "llama-3.2-nv-embedqa-1b-v2"
                 },
                 timeout=60
             )
@@ -55,12 +55,12 @@ class NeMoRetrieverClient:
     def embed(self, text: str) -> List[float]:
         """
         Generate embedding for a single text
-        
+
         Args:
             text: Text string to embed
-            
+
         Returns:
-            Embedding vector (768-dimensional)
+            Embedding vector (2048-dimensional)
         """
         embeddings = self.embed_batch([text])
         return embeddings[0]
