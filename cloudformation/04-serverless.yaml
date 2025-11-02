@@ -442,6 +442,7 @@ Resources:
       BucketName: !Sub 'syntharbiter-${EnvironmentName}-lambda-code-${AWS::AccountId}'
       VersioningConfiguration:
         Status: Enabled
+    DeletionPolicy: Retain
 
   # Cognito Authorizer for API Gateway
   CognitoAuthorizer:
