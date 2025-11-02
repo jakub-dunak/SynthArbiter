@@ -1,7 +1,10 @@
 // SynthArbiter Main JavaScript
 (function() {
     'use strict';
-    
+
+    const config = window.SYNTHARBITER_CONFIG || {};
+    const { Auth } = window.aws_amplify || {};
+
     const form = document.getElementById('scenario-form');
     const loading = document.getElementById('loading');
     const results = document.getElementById('results');
@@ -26,12 +29,25 @@
         form.querySelector('button[type="submit"]').disabled = true;
         
         try {
-            const response = await fetch('/api/analyze', {
+            // Get authentication token
+            let authHeaders = {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            };
+
+            if (Auth) {
+                try {
+                    const session = await Auth.currentSession();
+                    const token = session.getIdToken().getJwtToken();
+                    authHeaders['Authorization'] = `Bearer ${token}`;
+                } catch (authError) {
+                    console.warn('No active session, proceeding without authentication');
+                }
+            }
+
+            const response = await fetch(`${config.API_BASE_URL}/api/analyze`, {
                 method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json'
-                },
+                headers: authHeaders,
                 body: JSON.stringify({ scenario, frameworks })
             });
             

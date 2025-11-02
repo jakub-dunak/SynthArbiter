@@ -1,22 +1,22 @@
 {
   "region": "us-east-1",
   "dev": {
-    "eksNodeType": "g5.xlarge",
-    "cpuNodeType": "t3.medium",
-    "opensearchInstanceType": "t3.medium.search",
-    "nemoRetrieverVersion": "v1.0",
-    "nemoGuardrailsVersion": "v0.8",
-    "nemoEvaluatorVersion": "v1.0",
-    "nimModelVersion": "llama-3.1-nemotron-nano-8B-v1"
+    "nimReasoningModel": "meta/llama-3.1-nemotron-nano-8b-v1",
+    "nimGuardrailsModel": "nvidia/llama-3.1-nemoguard-8b-content-safety",
+    "nimEvaluatorModel": "nvidia/nemo-evaluator",
+    "instanceType": "ml.g5.2xlarge",
+    "lambdaMemorySize": 2048,
+    "lambdaTimeout": 300,
+    "environment": "dev"
   },
   "prod": {
-    "eksNodeType": "g5.xlarge",
-    "cpuNodeType": "t3.medium",
-    "opensearchInstanceType": "t3.medium.search",
-    "nemoRetrieverVersion": "v1.0",
-    "nemoGuardrailsVersion": "v0.8",
-    "nemoEvaluatorVersion": "v1.0",
-    "nimModelVersion": "llama-3.1-nemotron-nano-8B-v1"
+    "nimReasoningModel": "meta/llama-3.1-nemotron-nano-8b-v1",
+    "nimGuardrailsModel": "nvidia/llama-3.1-nemoguard-8b-content-safety",
+    "nimEvaluatorModel": "nvidia/nemo-evaluator",
+    "instanceType": "ml.g5.2xlarge",
+    "lambdaMemorySize": 2048,
+    "lambdaTimeout": 300,
+    "environment": "prod"
   }
 }
 

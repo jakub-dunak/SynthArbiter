@@ -98,51 +98,6 @@ Resources:
       SSESpecification:
         SSEEnabled: true
 
-  # OpenSearch Domain
-  OpenSearchDomain:
-    Type: AWS::OpenSearch::Domain
-    Properties:
-      DomainName: syntharbiter-opensearch
-      ClusterConfig:
-        InstanceType: t3.medium.search
-        InstanceCount: 3
-        DedicatedMasterEnabled: false
-      EBSOptions:
-        EBSEnabled: true
-        VolumeType: gp3
-        VolumeSize: 20
-      VPCOptions:
-        SecurityGroupIds:
-          - !ImportValue
-            'Fn::Sub': '${NETWORK_STACK_NAME}-OpenSearchSecurityGroupId'
-        SubnetIds:
-          - !Split
-              - ','
-              - !ImportValue
-                'Fn::Sub': '${NETWORK_STACK_NAME}-PrivateSubnetIds'
-      EngineVersion: OpenSearch_2.13
-      NodeToNodeEncryptionOptions:
-        Enabled: true
-      EncryptionAtRestOptions:
-        Enabled: true
-        KmsKeyId: alias/aws/es
-      DomainEndpointOptions:
-        EnforceHTTPS: true
-        TLSSecurityPolicy: Policy-Min-TLS-1-2-2019-07
-      AdvancedSecurityOptions:
-        Enabled: false
-      AccessPolicies:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              AWS: '*'
-            Action: 'es:*'
-            Resource: !Sub 'arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/syntharbiter-opensearch/*'
-            Condition:
-              IpAddress:
-                'aws:SourceIp':
-                  - '10.0.0.0/16'
 
 Outputs:
   DataRawBucketName:
@@ -169,17 +124,6 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-LogsBucket'
 
-  OpenSearchEndpoint:
-    Description: OpenSearch endpoint
-    Value: !GetAtt OpenSearchDomain.DomainEndpoint
-    Export:
-      Name: !Sub '${AWS::StackName}-OpenSearchEndpoint'
-
-  OpenSearchARN:
-    Description: OpenSearch domain ARN
-    Value: !GetAtt OpenSearchDomain.DomainArn
-    Export:
-      Name: !Sub '${AWS::StackName}-OpenSearchARN'
 
   AnalysisHistoryTableName:
     Description: DynamoDB table name

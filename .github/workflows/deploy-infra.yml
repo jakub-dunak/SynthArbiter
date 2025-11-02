@@ -1,161 +1,256 @@
-name: Deploy Infrastructure
+name: Deploy SynthArbiter
 
 on:
-  # push:
-  #   branches: [main]
-  #   paths: ['cloudformation/**']
   workflow_dispatch:
     inputs:
       environment:
         type: choice
         options: [dev, prod]
         default: dev
+        description: Environment to deploy
       region:
         type: choice
         options: [us-east-1, us-west-2, eu-west-1, ap-southeast-1]
         default: us-east-1
         description: AWS region for deployment
+      skip_parameters:
+        type: boolean
+        default: false
+        description: Skip parameter setup (useful if already done)
 
 jobs:
-  deploy-cfn:
+  setup-parameters:
     runs-on: ubuntu-latest
     permissions:
       id-token: write
       contents: read
     env:
-      AWS_REGION: ${{ github.event.inputs.region || 'us-east-1' }}
-      ENVIRONMENT: ${{ github.event.inputs.environment || 'dev' }}
-    
+      AWS_REGION: ${{ inputs.region || 'us-east-1' }}
+      ENVIRONMENT: ${{ inputs.environment || 'dev' }}
     steps:
+      - name: Skip Parameter Setup
+        if: ${{ inputs.skip_parameters == true }}
+        run: |
+          echo "⏭️ Skipping parameter setup as requested"
+          exit 0
+
       - uses: actions/checkout@v4
-      
+
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           role-session-name: GitHubActions-SynthArbiter
           aws-region: ${{ env.AWS_REGION }}
-      
+
+      - name: Sync Parameters to SSM
+        if: ${{ inputs.skip_parameters != true }}
+        run: |
+          echo "🔧 Setting up parameters for ${{ env.ENVIRONMENT }} environment..."
+          jq -r ".${{ env.ENVIRONMENT }} // empty | to_entries[] | \"\(.key)=\(.value)\"" config/parameters.json | while IFS='=' read -r key value; do
+            aws ssm put-parameter \
+              --name "/syntharbiter/$key" \
+              --value "$value" \
+              --type String \
+              --overwrite
+            echo "✓ Updated parameter: /syntharbiter/$key"
+          done
+
+      - name: Setup Secrets
+        if: ${{ inputs.skip_parameters != true }}
+        run: |
+          echo "🔐 Setting up secrets..."
+          if ! aws secretsmanager describe-secret --secret-id /syntharbiter/nvidia-ngc-api-key 2>/dev/null; then
+            aws secretsmanager create-secret \
+              --name /syntharbiter/nvidia-ngc-api-key \
+              --secret-string "${{ secrets.NVIDIA_NGC_API_KEY }}"
+            echo "✓ Created NGC API key secret"
+          else
+            aws secretsmanager update-secret \
+              --secret-id /syntharbiter/nvidia-ngc-api-key \
+              --secret-string "${{ secrets.NVIDIA_NGC_API_KEY }}"
+            echo "✓ Updated NGC API key secret"
+          fi
+
+  deploy-infrastructure:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    needs: setup-parameters
+    env:
+      AWS_REGION: ${{ inputs.region || 'us-east-1' }}
+      ENVIRONMENT: ${{ inputs.environment || 'dev' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-session-name: GitHubActions-SynthArbiter
+          aws-region: ${{ env.AWS_REGION }}
+
       - name: Validate CloudFormation Templates
         run: |
-          for template in cloudformation/*.yaml; do
-            echo "Validating $template..."
-            aws cloudformation validate-template --template-body file://$template || exit 1
-          done
-          echo "✓ All templates validated"
-      
-      - name: Deploy Parameters Stack
+          echo "Validating NIM microservices template..."
+          aws cloudformation validate-template --template-body file://cloudformation/04-serverless.yaml || exit 1
+          echo "✓ NIM template validated"
+
+      - name: Package Lambda Functions
         run: |
-          aws cloudformation deploy \
-            --template-file cloudformation/00-parameters.yaml \
-            --stack-name syntharbiter-parameters-${{ env.ENVIRONMENT }} \
-            --parameter-overrides NGCAPIKey="${{ secrets.NVIDIA_NGC_API_KEY }}" Environment=${{ env.ENVIRONMENT }} \
-            --capabilities CAPABILITY_NAMED_IAM \
-            --no-fail-on-empty-changeset
-      
+          # Create Lambda code bucket
+          LAMBDA_BUCKET="syntharbiter-${{ env.ENVIRONMENT }}-lambda-code-${{ secrets.AWS_ACCOUNT_ID }}"
+          aws s3 mb s3://$LAMBDA_BUCKET --region ${{ env.AWS_REGION }} || echo "Bucket may already exist"
+
+          # Package and upload analyze Lambda
+          cd lambda/analyze
+          zip -r analyze.zip . -x "*.pyc" "__pycache__/*"
+          aws s3 cp analyze.zip s3://$LAMBDA_BUCKET/syntharbiter-${{ env.ENVIRONMENT }}/analyze.zip
+          cd ../..
+
+          # Package and upload evaluate Lambda
+          cd lambda/evaluate
+          zip -r evaluate.zip . -x "*.pyc" "__pycache__/*"
+          aws s3 cp evaluate.zip s3://$LAMBDA_BUCKET/syntharbiter-${{ env.ENVIRONMENT }}/evaluate.zip
+          cd ../..
+
+          # Package and upload guardrails Lambda
+          cd lambda/guardrails
+          zip -r guardrails.zip . -x "*.pyc" "__pycache__/*"
+          aws s3 cp guardrails.zip s3://$LAMBDA_BUCKET/syntharbiter-${{ env.ENVIRONMENT }}/guardrails.zip
+          cd ../..
+
       - name: Deploy Network Stack
         run: |
           aws cloudformation deploy \
             --template-file cloudformation/01-network.yaml \
             --stack-name syntharbiter-network-${{ env.ENVIRONMENT }} \
             --capabilities CAPABILITY_NAMED_IAM \
+            --region ${{ env.AWS_REGION }} \
             --no-fail-on-empty-changeset
-      
-      - name: Deploy IAM Stack
-        run: |
-          aws cloudformation deploy \
-            --template-file cloudformation/02-iam.yaml \
-            --stack-name syntharbiter-iam-${{ env.ENVIRONMENT }} \
-            --parameter-overrides NEMO_STACK_NAME=syntharbiter-opensearch-${{ env.ENVIRONMENT }} NETWORK_STACK_NAME=syntharbiter-network-${{ env.ENVIRONMENT }} \
-            --capabilities CAPABILITY_NAMED_IAM \
-            --no-fail-on-empty-changeset
-      
+
       - name: Deploy Storage Stack
         run: |
           aws cloudformation deploy \
-            --template-file cloudformation/03-storage.yaml \
+            --template-file cloudformation/02-storage.yaml \
             --stack-name syntharbiter-storage-${{ env.ENVIRONMENT }} \
-            --parameter-overrides NETWORK_STACK_NAME=syntharbiter-network-${{ env.ENVIRONMENT }} \
+            --parameter-overrides EnvironmentName=${{ env.ENVIRONMENT }} \
             --capabilities CAPABILITY_NAMED_IAM \
+            --region ${{ env.AWS_REGION }} \
             --no-fail-on-empty-changeset
-      
-      - name: Deploy EKS Stack
+
+      - name: Deploy Frontend Auth Stack
         run: |
           aws cloudformation deploy \
-            --template-file cloudformation/04-eks.yaml \
-            --stack-name syntharbiter-eks-${{ env.ENVIRONMENT }} \
-            --parameter-overrides ClusterName=syntharbiter-cluster IAM_STACK_NAME=syntharbiter-iam-${{ env.ENVIRONMENT }} NETWORK_STACK_NAME=syntharbiter-network-${{ env.ENVIRONMENT }} \
+            --template-file cloudformation/03-frontend-auth.yaml \
+            --stack-name syntharbiter-frontend-${{ env.ENVIRONMENT }} \
+            --parameter-overrides Environment=${{ env.ENVIRONMENT }} \
             --capabilities CAPABILITY_NAMED_IAM \
+            --region ${{ env.AWS_REGION }} \
             --no-fail-on-empty-changeset
-      
-      - name: Deploy Application Stack
+
+      - name: Deploy NIM Microservices Stack
         run: |
           aws cloudformation deploy \
-            --template-file cloudformation/06-application.yaml \
-            --stack-name syntharbiter-app-${{ env.ENVIRONMENT }} \
+            --template-file cloudformation/04-serverless.yaml \
+            --stack-name syntharbiter-nim-${{ env.ENVIRONMENT }} \
+            --parameter-overrides EnvironmentName=${{ env.ENVIRONMENT }} NetworkStackName=syntharbiter-network-${{ env.ENVIRONMENT }} StorageStackName=syntharbiter-storage-${{ env.ENVIRONMENT }} FrontendStackName=syntharbiter-frontend-${{ env.ENVIRONMENT }} \
+            --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
+            --region ${{ env.AWS_REGION }} \
             --no-fail-on-empty-changeset
 
-      - name: Deploy Frontend + Auth Stack (Amplify Manual + Cognito)
-        env:
-          APP_NAME: syntharbiter-frontend-${{ env.ENVIRONMENT }}
+      - name: Deploy Static Website
         run: |
-          aws cloudformation deploy \
-            --template-file cloudformation/06-frontend-auth.yaml \
-            --stack-name syntharbiter-frontend-auth-${{ env.ENVIRONMENT }} \
-            --capabilities CAPABILITY_NAMED_IAM \
-            --parameter-overrides \
-              Environment=${{ env.ENVIRONMENT }} \
-              AppName="$APP_NAME" \
-            --no-fail-on-empty-changeset
+          # Get stack outputs from NIM microservices stack
+          WEBSITE_BUCKET=$(aws cloudformation describe-stacks \
+            --stack-name syntharbiter-nim-${{ env.ENVIRONMENT }} \
+            --query 'Stacks[0].Outputs[?OutputKey==`WebsiteBucket`].OutputValue' \
+            --output text --region ${{ env.AWS_REGION }})
 
-      - name: Build and Deploy Frontend to Amplify S3
-        run: |
-          # Get Amplify app outputs
-          AMPLIFY_APP_ID=$(aws cloudformation describe-stacks --stack-name syntharbiter-frontend-auth-${{ env.ENVIRONMENT }} --query 'Stacks[0].Outputs[?OutputKey==`AmplifyAppId`].OutputValue' --output text)
-          USER_POOL_ID=$(aws cloudformation describe-stacks --stack-name syntharbiter-frontend-auth-${{ env.ENVIRONMENT }} --query 'Stacks[0].Outputs[?OutputKey==`UserPoolId`].OutputValue' --output text)
-          USER_POOL_CLIENT_ID=$(aws cloudformation describe-stacks --stack-name syntharbiter-frontend-auth-${{ env.ENVIRONMENT }} --query 'Stacks[0].Outputs[?OutputKey==`UserPoolClientId`].OutputValue' --output text)
+          API_URL=$(aws cloudformation describe-stacks \
+            --stack-name syntharbiter-nim-${{ env.ENVIRONMENT }} \
+            --query 'Stacks[0].Outputs[?OutputKey==`ApiURL`].OutputValue' \
+            --output text --region ${{ env.AWS_REGION }})
 
-          echo "Amplify App ID: $AMPLIFY_APP_ID"
-          echo "User Pool ID: $USER_POOL_ID"
-          echo "User Pool Client ID: $USER_POOL_CLIENT_ID"
+          AMPLIFY_URL=$(aws cloudformation describe-stacks \
+            --stack-name syntharbiter-nim-${{ env.ENVIRONMENT }} \
+            --query 'Stacks[0].Outputs[?OutputKey==`WebsiteURL`].OutputValue' \
+            --output text --region ${{ env.AWS_REGION }})
 
-          # Get S3 bucket name from Amplify app
-          S3_BUCKET=$(aws amplify get-app --app-id $AMPLIFY_APP_ID --query 'app.deploymentArtifacts' --output text)
-          echo "S3 Bucket: $S3_BUCKET"
+          # Get Cognito outputs from frontend stack
+          USER_POOL_ID=$(aws cloudformation describe-stacks \
+            --stack-name syntharbiter-frontend-${{ env.ENVIRONMENT }} \
+            --query 'Stacks[0].Outputs[?OutputKey==`UserPoolId`].OutputValue' \
+            --output text --region ${{ env.AWS_REGION }})
 
-          # Build frontend
-          mkdir -p build
-          cp -r app/static/* build/ 2>/dev/null || true
-          cp app/templates/index.html build/index.html 2>/dev/null || true
+          USER_POOL_CLIENT_ID=$(aws cloudformation describe-stacks \
+            --stack-name syntharbiter-frontend-${{ env.ENVIRONMENT }} \
+            --query 'Stacks[0].Outputs[?OutputKey==`UserPoolClientId`].OutputValue' \
+            --output text --region ${{ env.AWS_REGION }})
 
-          # Generate config.js with Cognito details
-          cat > build/config.js << EOF
-          window.COGNITO_CONFIG = {
-            region: '${{ env.AWS_REGION }}',
-            userPoolId: '$USER_POOL_ID',
-            userPoolWebClientId: '$USER_POOL_CLIENT_ID',
-            domain: '',
-            redirectSignIn: '',
-            redirectSignOut: ''
-          };
-          EOF
+          echo "Website Bucket: $WEBSITE_BUCKET"
+          echo "API URL: $API_URL"
 
-          # Upload to S3
-          aws s3 sync build/ s3://$S3_BUCKET/ --delete --exact-timestamps
+          # Update config.js
+          sed -i "s|your-api-gateway-url|$API_URL|g" app/static/js/config.js
+          sed -i "s|your-user-pool-id|$USER_POOL_ID|g" app/static/js/config.js
+          sed -i "s|your-user-pool-client-id|$USER_POOL_CLIENT_ID|g" app/static/js/config.js
 
-          # Create deployment
-          DEPLOYMENT_ID=$(aws amplify create-deployment --app-id $AMPLIFY_APP_ID --branch-name manual --query 'jobId' --output text)
-          echo "Deployment ID: $DEPLOYMENT_ID"
+          # Upload website files to S3
+          aws s3 sync app/templates/ s3://$WEBSITE_BUCKET/ --delete --region ${{ env.AWS_REGION }}
+          aws s3 sync app/static/ s3://$WEBSITE_BUCKET/ --delete --region ${{ env.AWS_REGION }}
 
-          # Start deployment
-          aws amplify start-deployment --app-id $AMPLIFY_APP_ID --branch-name manual --job-id $DEPLOYMENT_ID
-      
+          # Deploy from S3 to Amplify
+          AMPLIFY_APP_ID=$(aws cloudformation describe-stacks \
+            --stack-name syntharbiter-nim-${{ env.ENVIRONMENT }} \
+            --query 'Stacks[0].Outputs[?OutputKey==`AmplifyAppId`].OutputValue' \
+            --output text --region ${{ env.AWS_REGION }})
+
+          aws amplify start-deployment \
+            --app-id $AMPLIFY_APP_ID \
+            --branch-name ${{ env.ENVIRONMENT }} \
+            --source-url s3://$WEBSITE_BUCKET/ \
+            --source-url-type BUCKET_PREFIX \
+            --region ${{ env.AWS_REGION }}
+
       - name: Output Deployment Info
         run: |
-          echo "Deployment completed for environment: ${{ env.ENVIRONMENT }}"
-          aws cloudformation describe-stacks --stack-name syntharbiter-eks-${{ env.ENVIRONMENT }} --query 'Stacks[0].Outputs' --output table
-      
-      - name: Install NVIDIA Device Plugin
-        run: |
-          kubectl apply -f https://raw.githubusercontent.com/NVIDIA/k8s-device-plugin/v0.14.5/nvidia-device-plugin.yml
-          echo "✓ NVIDIA Device Plugin installed"
+          echo "🎉 SynthArbiter deployment completed successfully!"
+          echo ""
+          echo "📊 Deployment Summary:"
+          echo "🌐 Amplify Website URL: $AMPLIFY_URL"
+          echo "🔗 API Gateway URL: $API_URL"
+          echo "🪣 Website S3 Bucket: $WEBSITE_BUCKET"
+          echo "👤 Cognito User Pool ID: $USER_POOL_ID"
+          echo "🔑 Cognito Client ID: $USER_POOL_CLIENT_ID"
+          echo ""
+          echo "📋 Infrastructure Stack Outputs:"
+          echo "Network Stack:"
+          aws cloudformation describe-stacks \
+            --stack-name syntharbiter-network-${{ env.ENVIRONMENT }} \
+            --query 'Stacks[0].Outputs' \
+            --output table \
+            --region ${{ env.AWS_REGION }} || echo "No outputs"
+          echo ""
+          echo "Storage Stack:"
+          aws cloudformation describe-stacks \
+            --stack-name syntharbiter-storage-${{ env.ENVIRONMENT }} \
+            --query 'Stacks[0].Outputs' \
+            --output table \
+            --region ${{ env.AWS_REGION }} || echo "No outputs"
+          echo ""
+          echo "Frontend Stack:"
+          aws cloudformation describe-stacks \
+            --stack-name syntharbiter-frontend-${{ env.ENVIRONMENT }} \
+            --query 'Stacks[0].Outputs' \
+            --output table \
+            --region ${{ env.AWS_REGION }} || echo "No outputs"
+          echo ""
+          echo "NIM Microservices Stack:"
+          aws cloudformation describe-stacks \
+            --stack-name syntharbiter-nim-${{ env.ENVIRONMENT }} \
+            --query 'Stacks[0].Outputs' \
+            --output table \
+            --region ${{ env.AWS_REGION }} || echo "No outputs"
+
 

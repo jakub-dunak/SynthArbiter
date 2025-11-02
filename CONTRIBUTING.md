@@ -10,19 +10,15 @@ SynthArbiter/
 │   ├── nemo_clients.py      # NeMo microservices client wrappers
 │   └── reasoning_engine.py  # Multi-step ethical reasoning agent
 │
-├── app/                      # Flask web application
-│   ├── Dockerfile           # Container image definition
-│   ├── requirements.txt     # Python dependencies
-│   ├── server.py            # Flask API server
+├── app/                      # Static web application
+│   ├── static/              # CSS, JS, and configuration files
 │   └── templates/           # HTML templates
 │
 ├── cloudformation/          # AWS infrastructure templates
-│   ├── 00-parameters.yaml  # Parameter management
 │   ├── 01-network.yaml     # VPC and networking
-│   ├── 02-iam.yaml         # IAM roles and policies
-│   ├── 03-storage.yaml     # S3 and OpenSearch
-│   ├── 04-eks.yaml         # EKS cluster
-│   └── 06-application.yaml # Application monitoring
+│   ├── 03-storage.yaml     # S3 and data lake
+│   ├── 06-frontend-auth.yaml # Cognito authentication
+│   └── 07-serverless.yaml  # Serverless infrastructure
 │
 ├── config/                   # Configuration files
 │   └── parameters.json      # Environment parameters
@@ -32,9 +28,10 @@ SynthArbiter/
 │   ├── sources.yaml        # Data source definitions
 │   └── synthetic_generator.py # Scenario generation
 │
-├── k8s/                     # Kubernetes manifests
-│   ├── nemo/               # NeMo microservices
-│   └── app/                # Web app deployment
+├── lambda/                  # Serverless functions
+│   ├── analyze/            # Main reasoning Lambda
+│   ├── evaluate/           # Quality assessment Lambda
+│   └── guardrails/         # Content safety Lambda
 │
 ├── services/                # Service clients
 │   ├── nemo_retriever_client.py # NeMo Retriever API

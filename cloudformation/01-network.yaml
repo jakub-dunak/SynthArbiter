@@ -191,46 +191,6 @@ Resources:
       NatGatewayId: !Ref NATGateway2
 
   # Security Groups
-  EKSClusterSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Security group for EKS cluster
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - IpProtocol: -1
-          SourceSecurityGroupId: !Ref EKSNodeSecurityGroup
-          Description: Allow all traffic from node group
-      Tags:
-        - Key: Name
-          Value: syntharbiter-eks-cluster-sg
-
-  EKSNodeSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Security group for EKS node group
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - IpProtocol: -1
-          SourceSecurityGroupId: !Ref EKSClusterSecurityGroup
-          Description: Allow all traffic from cluster
-      Tags:
-        - Key: Name
-          Value: syntharbiter-eks-node-sg
-
-  OpenSearchSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Security group for OpenSearch
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          SourceSecurityGroupId: !Ref EKSNodeSecurityGroup
-          Description: Allow HTTPS from EKS nodes
-      Tags:
-        - Key: Name
-          Value: syntharbiter-opensearch-sg
 
   ALBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -275,23 +235,6 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-PublicSubnetIds'
 
-  EKSClusterSecurityGroupId:
-    Description: EKS Cluster Security Group ID
-    Value: !Ref EKSClusterSecurityGroup
-    Export:
-      Name: !Sub '${AWS::StackName}-EKSClusterSecurityGroupId'
-
-  EKSNodeSecurityGroupId:
-    Description: EKS Node Security Group ID
-    Value: !Ref EKSNodeSecurityGroup
-    Export:
-      Name: !Sub '${AWS::StackName}-EKSNodeSecurityGroupId'
-
-  OpenSearchSecurityGroupId:
-    Description: OpenSearch Security Group ID
-    Value: !Ref OpenSearchSecurityGroup
-    Export:
-      Name: !Sub '${AWS::StackName}-OpenSearchSecurityGroupId'
 
   ALBSecurityGroupId:
     Description: ALB Security Group ID

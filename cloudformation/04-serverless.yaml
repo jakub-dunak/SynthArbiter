@@ -1,0 +1,499 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'SynthArbiter - Serverless Infrastructure'
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: prod
+    Description: Environment name for resource naming
+
+  DomainName:
+    Type: String
+    Default: ''
+    Description: Custom domain name (leave empty for Amplify URL)
+
+  NetworkStackName:
+    Type: String
+    Default: ''
+    Description: Name of the network stack to get VPC information from
+
+  FrontendStackName:
+    Type: String
+    Default: ''
+    Description: Name of the frontend/auth stack to get Cognito information from
+
+Resources:
+  # S3 Bucket for Static Website
+  WebsiteBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'syntharbiter-${EnvironmentName}-website-${AWS::AccountId}'
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: index.html
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ['*']
+            AllowedMethods: [GET, POST, PUT, DELETE, HEAD]
+            AllowedOrigins: ['*']
+            MaxAge: 3000
+
+  WebsiteBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref WebsiteBucket
+      PolicyDocument:
+        Statement:
+          - Sid: PublicReadGetObject
+            Effect: Allow
+            Principal: '*'
+            Action: s3:GetObject
+            Resource: !Sub '${WebsiteBucket}/*'
+
+  # Amplify App for automated S3 bucket deployment
+  AmplifyApp:
+    Type: AWS::Amplify::App
+    Properties:
+      Name: !Sub 'syntharbiter-${EnvironmentName}'
+      Platform: WEB
+      Description: 'SynthArbiter frontend hosting with automated S3 deployment'
+      Repository: 'https://github.com/aws-samples/amplify-s3-deployment-placeholder.git'
+      CustomRules:
+        - Source: '/<*>'
+          Target: '/index.html'
+          Status: '404-200'
+        - Source: '/'
+          Target: '/index.html'
+          Status: '200'
+      EnvironmentVariables:
+        - Name: REACT_APP_API_URL
+          Value: !Sub 'https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentName}'
+        - Name: REACT_APP_USER_POOL_ID
+          Value:
+            Fn::ImportValue: !Sub '${FrontendStackName}-UserPoolId'
+        - Name: REACT_APP_USER_POOL_CLIENT_ID
+          Value:
+            Fn::ImportValue: !Sub '${FrontendStackName}-UserPoolClientId'
+
+  AmplifyBranch:
+    Type: AWS::Amplify::Branch
+    Properties:
+      AppId: !Ref AmplifyApp
+      BranchName: !Ref EnvironmentName
+      Description: !Sub 'Production branch for ${EnvironmentName} environment'
+      Stage: 'PRODUCTION'
+
+  # Cognito resources are imported from Frontend Stack
+
+  # DynamoDB Tables
+  AnalysisHistoryTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'SynthArbiterAnalysisHistory-${EnvironmentName}'
+      AttributeDefinitions:
+        - AttributeName: analysisId
+          AttributeType: S
+        - AttributeName: timestamp
+          AttributeType: N
+        - AttributeName: userId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: analysisId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: UserTimestampIndex
+          KeySchema:
+            - AttributeName: userId
+              KeyType: HASH
+            - AttributeName: timestamp
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+          BillingMode: PAY_PER_REQUEST
+      BillingMode: PAY_PER_REQUEST
+
+  # NIM Reasoning Microservice (Llama 3.1 Nemotron Nano)
+  NIMReasoningModel:
+    Type: AWS::SageMaker::Model
+    Properties:
+      ModelName: !Sub 'syntharbiter-nim-reasoning-${EnvironmentName}'
+      PrimaryContainer:
+        Image: 'nvcr.io/nvidia/nim/meta/llama-3.1-nemotron-nano-8b-v1:1.0.0'
+        Environment:
+          NIM_MODEL_PROFILE: '09e2f8e68f78ce94bf79d15b40a21333cea5d09dbe01ede63f6c957f4fcfab7b'
+      ExecutionRoleArn: !GetAtt SageMakerExecutionRole.Arn
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref SageMakerSecurityGroup
+        SubnetIds: !Split [',', !Sub '${NetworkStackName}-PrivateSubnetIds']
+
+  NIMReasoningEndpointConfig:
+    Type: AWS::SageMaker::EndpointConfig
+    Properties:
+      EndpointConfigName: !Sub 'syntharbiter-nim-reasoning-config-${EnvironmentName}'
+      ProductionVariants:
+        - VariantName: primary
+          ModelName: !Ref NIMReasoningModel
+          InitialInstanceCount: 1
+          InstanceType: ml.g5.2xlarge
+          InitialVariantWeight: 1.0
+
+  NIMReasoningEndpoint:
+    Type: AWS::SageMaker::Endpoint
+    Properties:
+      EndpointName: !Sub 'syntharbiter-nim-reasoning-${EnvironmentName}'
+      EndpointConfigName: !Ref NIMReasoningEndpointConfig
+
+  # NIM Guardrails Microservice
+  NIMGuardrailsModel:
+    Type: AWS::SageMaker::Model
+    Properties:
+      ModelName: !Sub 'syntharbiter-nim-guardrails-${EnvironmentName}'
+      PrimaryContainer:
+        Image: 'nvcr.io/nvidia/nim/nvidia/llama-3.1-nemoguard-8b-content-safety:1.0.0'
+      ExecutionRoleArn: !GetAtt SageMakerExecutionRole.Arn
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref SageMakerSecurityGroup
+        SubnetIds: !Split [',', !Sub '${NetworkStackName}-PrivateSubnetIds']
+
+  NIMGuardrailsEndpointConfig:
+    Type: AWS::SageMaker::EndpointConfig
+    Properties:
+      EndpointConfigName: !Sub 'syntharbiter-nim-guardrails-config-${EnvironmentName}'
+      ProductionVariants:
+        - VariantName: primary
+          ModelName: !Ref NIMGuardrailsModel
+          InitialInstanceCount: 1
+          InstanceType: ml.g5.2xlarge
+          InitialVariantWeight: 1.0
+
+  NIMGuardrailsEndpoint:
+    Type: AWS::SageMaker::Endpoint
+    Properties:
+      EndpointName: !Sub 'syntharbiter-nim-guardrails-${EnvironmentName}'
+      EndpointConfigName: !Ref NIMGuardrailsEndpointConfig
+
+  # NIM Evaluator Microservice
+  NIMEvaluatorModel:
+    Type: AWS::SageMaker::Model
+    Properties:
+      ModelName: !Sub 'syntharbiter-nim-evaluator-${EnvironmentName}'
+      PrimaryContainer:
+        Image: 'nvcr.io/nvidia/nim/nvidia/nemo-evaluator:1.0.0'
+      ExecutionRoleArn: !GetAtt SageMakerExecutionRole.Arn
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref SageMakerSecurityGroup
+        SubnetIds: !Split [',', !Sub '${NetworkStackName}-PrivateSubnetIds']
+
+  NIMEvaluatorEndpointConfig:
+    Type: AWS::SageMaker::EndpointConfig
+    Properties:
+      EndpointConfigName: !Sub 'syntharbiter-nim-evaluator-config-${EnvironmentName}'
+      ProductionVariants:
+        - VariantName: primary
+          ModelName: !Ref NIMEvaluatorModel
+          InitialInstanceCount: 1
+          InstanceType: ml.g5.2xlarge
+          InitialVariantWeight: 1.0
+
+  NIMEvaluatorEndpoint:
+    Type: AWS::SageMaker::Endpoint
+    Properties:
+      EndpointName: !Sub 'syntharbiter-nim-evaluator-${EnvironmentName}'
+      EndpointConfigName: !Ref NIMEvaluatorEndpointConfig
+
+  # Lambda Functions
+  AnalyzeLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'syntharbiter-analyze-${EnvironmentName}'
+      Runtime: python3.11
+      Handler: lambda_function.lambda_handler
+      Code:
+        S3Bucket: !Ref LambdaCodeBucket
+        S3Key: !Sub 'syntharbiter-${EnvironmentName}/analyze.zip'
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Environment:
+        Variables:
+          NIM_ENDPOINT_NAME: !Ref NIMReasoningEndpoint
+          GUARDRAILS_ENDPOINT_NAME: !Ref NIMGuardrailsEndpoint
+          EVALUATOR_ENDPOINT_NAME: !Ref NIMEvaluatorEndpoint
+          DYNAMODB_TABLE_NAME: !Ref AnalysisHistoryTable
+          USER_POOL_ID:
+            Fn::ImportValue: !Sub '${FrontendStackName}-UserPoolId'
+          GUARDRAILS_FUNCTION_NAME: !Ref GuardrailsLambda
+          EVALUATOR_FUNCTION_NAME: !Ref EvaluateLambda
+          ENVIRONMENT: !Ref EnvironmentName
+      Timeout: 300
+      MemorySize: 2048
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroup
+        SubnetIds: !Split [',', !Sub '${NetworkStackName}-PrivateSubnetIds']
+
+  EvaluateLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'syntharbiter-evaluate-${EnvironmentName}'
+      Runtime: python3.11
+      Handler: lambda_function.lambda_handler
+      Code:
+        S3Bucket: !Ref LambdaCodeBucket
+        S3Key: !Sub 'syntharbiter-${EnvironmentName}/evaluate.zip'
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 60
+      MemorySize: 512
+
+  GuardrailsLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'syntharbiter-guardrails-${EnvironmentName}'
+      Runtime: python3.11
+      Handler: lambda_function.lambda_handler
+      Code:
+        S3Bucket: !Ref LambdaCodeBucket
+        S3Key: !Sub 'syntharbiter-${EnvironmentName}/guardrails.zip'
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 60
+      MemorySize: 512
+
+  # API Gateway
+  ApiGateway:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub 'syntharbiter-api-${EnvironmentName}'
+      Description: SynthArbiter Serverless API
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+
+  ApiGatewayResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ParentId: !GetAtt ApiGateway.RootResourceId
+      PathPart: 'api'
+
+  AnalyzeResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ParentId: !Ref ApiGatewayResource
+      PathPart: 'analyze'
+
+  AnalyzeMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref AnalyzeResource
+      HttpMethod: POST
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref CognitoAuthorizer
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${AnalyzeLambda.Arn}/invocations'
+
+  # CORS OPTIONS method for analyze endpoint
+  AnalyzeOptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref ApiGateway
+      ResourceId: !Ref AnalyzeResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: '200'
+            ResponseParameters:
+              'method.response.header.Access-Control-Allow-Headers': "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+              'method.response.header.Access-Control-Allow-Methods': "'POST,OPTIONS'"
+              'method.response.header.Access-Control-Allow-Origin': "'*'"
+            ResponseTemplates:
+              'application/json': ''
+        PassthroughBehavior: NEVER
+        RequestTemplates:
+          'application/json': '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: '200'
+          ResponseParameters:
+            'method.response.header.Access-Control-Allow-Headers': true
+            'method.response.header.Access-Control-Allow-Methods': true
+            'method.response.header.Access-Control-Allow-Origin': true
+
+  ApiGatewayDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - AnalyzeMethod
+      - AnalyzeOptionsMethod
+    Properties:
+      RestApiId: !Ref ApiGateway
+      StageName: !Ref EnvironmentName
+
+  # IAM Roles
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'syntharbiter-lambda-${EnvironmentName}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+      Policies:
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                Resource: !GetAtt AnalysisHistoryTable.Arn
+        - PolicyName: SageMakerAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sagemaker:InvokeEndpoint
+                Resource:
+                  - !GetAtt NIMReasoningEndpoint.Arn
+                  - !GetAtt NIMGuardrailsEndpoint.Arn
+                  - !GetAtt NIMEvaluatorEndpoint.Arn
+
+  SageMakerExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'syntharbiter-sagemaker-${EnvironmentName}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: sagemaker.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSageMakerFullAccess
+      Policies:
+        - PolicyName: S3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:ListBucket
+                Resource:
+                  - 'arn:aws:s3:::jumpstart-cache-prod-*'
+                  - !Sub 'arn:aws:s3:::syntharbiter-${EnvironmentName}-*'
+
+  LambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Lambda functions
+      VpcId:
+        Fn::ImportValue: !Sub '${NetworkStackName}-VpcId'
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+
+  SageMakerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for SageMaker endpoints
+      VpcId:
+        Fn::ImportValue: !Sub '${NetworkStackName}-VpcId'
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+
+  # S3 Bucket for Lambda code
+  LambdaCodeBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'syntharbiter-${EnvironmentName}-lambda-code-${AWS::AccountId}'
+      VersioningConfiguration:
+        Status: Enabled
+
+  # Cognito Authorizer for API Gateway
+  CognitoAuthorizer:
+    Type: AWS::ApiGateway::Authorizer
+    Properties:
+      RestApiId: !Ref ApiGateway
+      Name: CognitoAuthorizer
+      Type: COGNITO_USER_POOLS
+      ProviderARNs:
+        - Fn::Sub:
+            - 'arn:aws:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${UserPoolId}'
+            - UserPoolId:
+                Fn::ImportValue: !Sub '${FrontendStackName}-UserPoolId'
+
+Outputs:
+  WebsiteURL:
+    Description: Amplify app URL with automated S3 deployment
+    Value: !GetAtt AmplifyApp.DefaultDomain
+
+  AmplifyAppId:
+    Description: Amplify application ID for automated deployments
+    Value: !Ref AmplifyApp
+    Export:
+      Name: !Sub '${AWS::StackName}-AmplifyAppId'
+
+  WebsiteBucket:
+    Description: S3 bucket for static website hosting
+    Value: !Ref WebsiteBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-WebsiteBucket'
+
+  ApiURL:
+    Description: API Gateway URL
+    Value: !Sub 'https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentName}'
+
+  UserPoolId:
+    Description: Cognito User Pool ID (imported from frontend stack)
+    Value:
+      Fn::ImportValue: !Sub '${FrontendStackName}-UserPoolId'
+    Export:
+      Name: !Sub '${AWS::StackName}-UserPoolId'
+
+  UserPoolClientId:
+    Description: Cognito User Pool Client ID (imported from frontend stack)
+    Value:
+      Fn::ImportValue: !Sub '${FrontendStackName}-UserPoolClientId'
+    Export:
+      Name: !Sub '${AWS::StackName}-UserPoolClientId'
+
+  AnalysisHistoryTable:
+    Description: DynamoDB table for analysis history
+    Value: !Ref AnalysisHistoryTable
+    Export:
+      Name: !Sub '${AWS::StackName}-AnalysisTable'
