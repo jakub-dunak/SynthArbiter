@@ -82,7 +82,7 @@ Resources:
   AmplifyBranch:
     Type: AWS::Amplify::Branch
     Properties:
-      AppId: !Ref AmplifyApp
+      AppId: !GetAtt AmplifyApp.AppId
       BranchName: !Ref EnvironmentName
       Description: !Sub 'Production branch for ${EnvironmentName} environment'
       Stage: 'PRODUCTION'
@@ -454,7 +454,7 @@ Outputs:
 
   AmplifyAppId:
     Description: Amplify application ID for automated deployments
-    Value: !Ref AmplifyApp
+    Value: !GetAtt AmplifyApp.AppId
     Export:
       Name: !Sub '${AWS::StackName}-AmplifyAppId'
 
