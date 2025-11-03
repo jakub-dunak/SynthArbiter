@@ -119,23 +119,34 @@ Resources:
             ProjectionType: ALL
 
   # NIM Reasoning Microservice (Llama 3.1 Nemotron Nano)
+  NIMReasoningModel:
+    Type: AWS::SageMaker::Model
+    Properties:
+      ModelName: !Sub 'syntharbiter-nim-reasoning-${EnvironmentName}'
+      PrimaryContainer:
+        Image: 'nvcr.io/nvidia/nim/meta/llama-3.1-nemotron-nano-8b-v1:1.0.0'
+        Environment:
+          NIM_MODEL_PROFILE: '09e2f8e68f78ce94bf79d15b40a21333cea5d09dbe01ede63f6c957f4fcfab7b'
+        ImageConfig:
+          RepositoryAccessMode: Platform
+      ExecutionRoleArn: !GetAtt SageMakerExecutionRole.Arn
+
   NIMReasoningEndpointConfig:
     Type: AWS::SageMaker::EndpointConfig
     Properties:
       EndpointConfigName: !Sub 'syntharbiter-nim-reasoning-config-${EnvironmentName}'
       ProductionVariants:
         - VariantName: primary
-          ContainerDefinition:
-            Image: 'nvcr.io/nvidia/nim/meta/llama-3.1-nemotron-nano-8b-v1:1.0.0'
-            Environment:
-              NIM_MODEL_PROFILE: '09e2f8e68f78ce94bf79d15b40a21333cea5d09dbe01ede63f6c957f4fcfab7b'
-            ImageConfig:
-              RepositoryAccessMode: Vpc
-              RepositoryAuthConfig:
-                RepositoryCredentialsProviderArn: !GetAtt SageMakerAuthLambda.Arn
+          ModelName: !GetAtt NIMReasoningModel.ModelName
           InitialInstanceCount: 1
           InstanceType: ml.g5.2xlarge
           InitialVariantWeight: 1.0
+
+  NIMReasoningEndpoint:
+    Type: AWS::SageMaker::Endpoint
+    Properties:
+      EndpointName: !Sub 'syntharbiter-nim-reasoning-${EnvironmentName}'
+      EndpointConfigName: !GetAtt NIMReasoningEndpointConfig.EndpointConfigName
       VpcConfig:
         SecurityGroupIds:
           - !Ref SageMakerSecurityGroup
@@ -144,13 +155,17 @@ Resources:
             - ','
             - Fn::ImportValue: !Sub '${NetworkStackName}-PrivateSubnetIds'
 
-  NIMReasoningEndpoint:
-    Type: AWS::SageMaker::Endpoint
-    Properties:
-      EndpointName: !Sub 'syntharbiter-nim-reasoning-${EnvironmentName}'
-      EndpointConfigName: !GetAtt NIMReasoningEndpointConfig.EndpointConfigName
-
   # NIM Guardrails Microservice
+  NIMGuardrailsModel:
+    Type: AWS::SageMaker::Model
+    Properties:
+      ModelName: !Sub 'syntharbiter-nim-guardrails-${EnvironmentName}'
+      PrimaryContainer:
+        Image: 'nvcr.io/nvidia/nim/nvidia/llama-3.1-nemoguard-8b-content-safety:1.0.0'
+        ImageConfig:
+          RepositoryAccessMode: Platform
+      ExecutionRoleArn: !GetAtt SageMakerExecutionRole.Arn
+
   NIMGuardrailsEndpointConfig:
     Type: AWS::SageMaker::EndpointConfig
     Properties:
@@ -179,8 +194,25 @@ Resources:
     Properties:
       EndpointName: !Sub 'syntharbiter-nim-guardrails-${EnvironmentName}'
       EndpointConfigName: !GetAtt NIMGuardrailsEndpointConfig.EndpointConfigName
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref SageMakerSecurityGroup
+        Subnets:
+          Fn::Split:
+            - ','
+            - Fn::ImportValue: !Sub '${NetworkStackName}-PrivateSubnetIds'
 
   # NIM Evaluator Microservice
+  NIMEvaluatorModel:
+    Type: AWS::SageMaker::Model
+    Properties:
+      ModelName: !Sub 'syntharbiter-nim-evaluator-${EnvironmentName}'
+      PrimaryContainer:
+        Image: 'nvcr.io/nvidia/nim/nvidia/nemo-evaluator:1.0.0'
+        ImageConfig:
+          RepositoryAccessMode: Platform
+      ExecutionRoleArn: !GetAtt SageMakerExecutionRole.Arn
+
   NIMEvaluatorEndpointConfig:
     Type: AWS::SageMaker::EndpointConfig
     Properties:
@@ -209,6 +241,13 @@ Resources:
     Properties:
       EndpointName: !Sub 'syntharbiter-nim-evaluator-${EnvironmentName}'
       EndpointConfigName: !GetAtt NIMEvaluatorEndpointConfig.EndpointConfigName
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref SageMakerSecurityGroup
+        Subnets:
+          Fn::Split:
+            - ','
+            - Fn::ImportValue: !Sub '${NetworkStackName}-PrivateSubnetIds'
 
   # Lambda Functions
   AnalyzeLambda:
