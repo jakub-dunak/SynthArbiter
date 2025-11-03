@@ -138,7 +138,7 @@ Resources:
       VPCOptions:
         SubnetIds: !Split
           - ','
-          - Fn::ImportValue: !Sub '${AWS::StackName}-PrivateSubnetIds'
+          - Fn::ImportValue: !Sub '${NetworkStackName}-PrivateSubnetIds'
         SecurityGroupIds:
           - !Ref OpenSearchSecurityGroup
 
