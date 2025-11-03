@@ -179,8 +179,6 @@ Resources:
           NIM_METRICS_PORT: '8002'
         ImageConfig:
           RepositoryAccessMode: Platform
-      ContainerStartupHealthCheckConfig:
-        HealthCheckSuccessTimeoutInSeconds: 900
       ExecutionRoleArn: !GetAtt SageMakerExecutionRole.Arn
       VpcConfig:
         SecurityGroupIds:
@@ -223,8 +221,6 @@ Resources:
           NIM_METRICS_PORT: '8002'
         ImageConfig:
           RepositoryAccessMode: Platform
-      ContainerStartupHealthCheckConfig:
-        HealthCheckSuccessTimeoutInSeconds: 900
       ExecutionRoleArn: !GetAtt SageMakerExecutionRole.Arn
       VpcConfig:
         SecurityGroupIds:
@@ -268,8 +264,6 @@ Resources:
           NIM_METRICS_PORT: '8002'
         ImageConfig:
           RepositoryAccessMode: Platform
-      ContainerStartupHealthCheckConfig:
-        HealthCheckSuccessTimeoutInSeconds: 900
       ExecutionRoleArn: !GetAtt SageMakerExecutionRole.Arn
       VpcConfig:
         SecurityGroupIds:
