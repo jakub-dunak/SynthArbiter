@@ -29,35 +29,7 @@ Parameters:
 
 Resources:
 
-  # ECR Repositories for NIM models
-  NIMReasoningRepository:
-    Type: AWS::ECR::Repository
-    Properties:
-      RepositoryName: !Sub 'syntharbiter-nim-reasoning'
-      ImageScanningConfiguration:
-        ScanOnPush: true
-      EncryptionConfiguration:
-        EncryptionType: AES256
-
-  NIMGuardrailsRepository:
-    Type: AWS::ECR::Repository
-    Properties:
-      RepositoryName: !Sub 'syntharbiter-nim-guardrails'
-      ImageScanningConfiguration:
-        ScanOnPush: true
-      EncryptionConfiguration:
-        EncryptionType: AES256
-
-  NIMEmbeddingRepository:
-    Type: AWS::ECR::Repository
-    Properties:
-      RepositoryName: !Sub 'syntharbiter-nim-embedding'
-      ImageScanningConfiguration:
-        ScanOnPush: true
-      EncryptionConfiguration:
-        EncryptionType: AES256
-
-  # VPC Endpoints for ECR and S3 access
+  # VPC Endpoints for ECR and S3 access (ECR repositories created by CI/CD pipeline)
   ECRApiEndpoint:
     Type: AWS::EC2::VPCEndpoint
     Properties:
