@@ -126,7 +126,6 @@ Resources:
       VpcConfig:
         SecurityGroupIds:
           - !Ref SageMakerSecurityGroup
-        SubnetIds: !Split [',', !Sub '${NetworkStackName}-PrivateSubnetIds']
 
   NIMReasoningEndpointConfig:
     Type: AWS::SageMaker::EndpointConfig
@@ -156,7 +155,6 @@ Resources:
       VpcConfig:
         SecurityGroupIds:
           - !Ref SageMakerSecurityGroup
-        SubnetIds: !Split [',', !Sub '${NetworkStackName}-PrivateSubnetIds']
 
   NIMGuardrailsEndpointConfig:
     Type: AWS::SageMaker::EndpointConfig
@@ -186,7 +184,6 @@ Resources:
       VpcConfig:
         SecurityGroupIds:
           - !Ref SageMakerSecurityGroup
-        SubnetIds: !Split [',', !Sub '${NetworkStackName}-PrivateSubnetIds']
 
   NIMEvaluatorEndpointConfig:
     Type: AWS::SageMaker::EndpointConfig
