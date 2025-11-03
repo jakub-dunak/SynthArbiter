@@ -62,7 +62,6 @@ Resources:
       Name: !Sub 'syntharbiter-${EnvironmentName}'
       Platform: WEB
       Description: 'SynthArbiter frontend hosting with automated S3 deployment'
-      Repository: 'https://github.com/aws-samples/amplify-s3-deployment-placeholder.git'
       CustomRules:
         - Source: '/<*>'
           Target: '/index.html'
