@@ -21,6 +21,18 @@ except ImportError:
     NeMOretrieverClient = None
     VectorStore = None
 
+# Initialize OpenSearch client for vector search
+try:
+    opensearch_endpoint = os.environ.get('OPENSEARCH_ENDPOINT')
+    if opensearch_endpoint:
+        vector_store = VectorStore(endpoint=opensearch_endpoint)
+    else:
+        vector_store = None
+        logger.warning("OpenSearch endpoint not configured")
+except Exception as e:
+    vector_store = None
+    logger.error(f"Failed to initialize OpenSearch client: {e}")
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -215,11 +227,94 @@ def validate_output(text: str) -> bool:
         return not any(term in text.lower() for term in forbidden_terms)
 
 def retrieve_context(scenario: str) -> List[Dict]:
-    """Retrieve relevant context (simplified)"""
-    # Placeholder - will use SageMaker embeddings + vector search
+    """Retrieve relevant context using embedding model and vector search"""
+    try:
+        if not vector_store:
+            logger.warning("Vector store not available, using fallback context")
+            return get_fallback_context()
+
+        # Generate embedding for the scenario
+        embedding = generate_embedding(scenario)
+        if not embedding:
+            logger.warning("Failed to generate embedding, using fallback context")
+            return get_fallback_context()
+
+        # Search for similar vectors in OpenSearch
+        results = vector_store.search_similar(
+            query_embedding=embedding,
+            top_k=5  # Return top 5 similar documents
+        )
+
+        # Format results for the reasoning pipeline
+        context_docs = []
+        for result in results:
+            context_docs.append({
+                'text': result.get('_source', {}).get('text', ''),
+                'score': result.get('_score', 0.0),
+                'metadata': result.get('_source', {}).get('metadata', {})
+            })
+
+        logger.info(f"Retrieved {len(context_docs)} context documents")
+        return context_docs
+
+    except Exception as e:
+        logger.error(f"Context retrieval error: {e}")
+        return get_fallback_context()
+
+def generate_embedding(text: str) -> Optional[List[float]]:
+    """Generate embedding vector using NIM embedding model"""
+    try:
+        embedding_endpoint = os.environ.get('EMBEDDING_ENDPOINT_NAME')
+        if not embedding_endpoint:
+            logger.error("Embedding endpoint not configured")
+            return None
+
+        # Prepare the request for NIM embedding model
+        payload = {
+            'input': [text],
+            'model': 'nvidia/nv-embedqa-e5-v5',
+            'encoding_format': 'float'
+        }
+
+        response = sagemaker.invoke_endpoint(
+            EndpointName=embedding_endpoint,
+            ContentType='application/json',
+            Body=json.dumps(payload)
+        )
+
+        result = json.loads(response['Body'].read().decode('utf-8'))
+
+        # NIM embedding models typically return embeddings in 'data' field
+        if 'data' in result and result['data']:
+            embedding = result['data'][0].get('embedding', [])
+            logger.info(f"Generated embedding with {len(embedding)} dimensions")
+            return embedding
+        else:
+            logger.error(f"Unexpected embedding response format: {result}")
+            return None
+
+    except Exception as e:
+        logger.error(f"Embedding generation error: {e}")
+        return None
+
+def get_fallback_context() -> List[Dict]:
+    """Provide fallback context when vector search is unavailable"""
     return [
-        {'text': 'Ethical considerations in AI development...', 'score': 0.8},
-        {'text': 'Neural organoid research guidelines...', 'score': 0.7}
+        {
+            'text': 'Ethical considerations in AI development require balancing innovation with responsible deployment. Key principles include transparency, accountability, and human oversight.',
+            'score': 0.8,
+            'metadata': {'source': 'fallback', 'type': 'ethical_principles'}
+        },
+        {
+            'text': 'Research involving neural technologies should consider participant autonomy, informed consent, and potential long-term societal impacts.',
+            'score': 0.7,
+            'metadata': {'source': 'fallback', 'type': 'research_ethics'}
+        },
+        {
+            'text': 'Utilitarian ethics focuses on maximizing overall happiness and minimizing harm, while deontological ethics emphasizes duty and moral rules.',
+            'score': 0.6,
+            'metadata': {'source': 'fallback', 'type': 'ethical_frameworks'}
+        }
     ]
 
 def generate_reasoning(scenario: str, context: str, frameworks: List[str]) -> str:

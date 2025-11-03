@@ -63,7 +63,7 @@ class VectorStore:
                 "properties": {
                     "embedding": {
                         "type": "knn_vector",
-                        "dimension": 2048,
+                        "dimension": 1024,  # E5-v5 models produce 1024-dimensional embeddings
                         "method": {
                             "name": "hnsw",
                             "space_type": "cosinesimilarity",

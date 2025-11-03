@@ -15,6 +15,8 @@ graph TB
         NIM_REASONING[NIM Reasoning<br/>Llama 3.1 Nemotron Nano 8B]
         NIM_GUARD[NIM Guardrails<br/>Content Safety]
         NIM_EVAL[NIM Evaluator<br/>Quality Assessment]
+        NIM_EMBED[NIM Embedding<br/>E5-v5 Vector Generation]
+        OPENSEARCH[(OpenSearch<br/>Vector Database)]
         LAMBDA_ANALYZE[Lambda<br/>Analysis Orchestrator]
     end
 
@@ -29,13 +31,15 @@ graph TB
         COGNITO[Amazon Cognito<br/>User Management]
     end
 
-    S3 --> SAGEMAKER
+    S3 --> NIM_EMBED
+    NIM_EMBED --> OPENSEARCH
     CF --> S3_WEB
     CF --> API_GW
     API_GW --> LAMBDA_ANALYZE
-    LAMBDA_ANALYZE --> SAGEMAKER
-    LAMBDA_ANALYZE --> LAMBDA_EVAL
-    LAMBDA_ANALYZE --> LAMBDA_GUARD
+    LAMBDA_ANALYZE --> NIM_EMBED
+    LAMBDA_ANALYZE --> OPENSEARCH
+    LAMBDA_ANALYZE --> NIM_GUARD
+    LAMBDA_ANALYZE --> NIM_EVAL
     LAMBDA_ANALYZE --> DB
     API_GW --> COGNITO
 ```
@@ -47,6 +51,8 @@ graph TB
   - NIM Reasoning (Llama 3.1 Nemotron Nano 8B)
   - NIM Guardrails (Content Safety)
   - NIM Evaluator (Quality Assessment)
+  - NIM Embedding (E5-v5 for vector generation)
+- **OpenSearch** - Vector database with k-NN semantic search
 - **AWS Lambda** - Analysis orchestration and API handling
 - **SageMaker Endpoints** - Persistent GPU instances for NIM microservices
 
@@ -63,6 +69,51 @@ graph TB
 - **Static HTML/CSS/JS** - No backend web framework needed
 - Chart.js - Data visualizations
 - Tailwind CSS - UI framework
+
+## RAG System (Retrieval-Augmented Generation)
+
+SynthArbiter includes a complete RAG system for enhanced ethical analysis:
+
+### How It Works
+
+```
+User Query → Embedding Generation → Vector Search → Context Retrieval → Enhanced Reasoning
+```
+
+1. **Semantic Search**: Ethical scenarios are converted to vectors using NIM Embedding (E5-v5)
+2. **Context Retrieval**: OpenSearch finds similar historical cases and ethical principles
+3. **Enhanced Analysis**: Retrieved context is included in reasoning prompts for more informed decisions
+
+### Benefits
+
+- **Contextual Analysis**: Each ethical dilemma gets relevant historical context
+- **Improved Accuracy**: RAG provides more informed and nuanced ethical reasoning
+- **Semantic Matching**: Finds relevant cases even without exact keyword matches
+- **Scalable Knowledge**: OpenSearch handles millions of ethical documents
+
+### Data Pipeline
+
+After deployment, populate the knowledge base:
+
+```bash
+# Build vector index from preprocessed ethical literature
+python scripts/build_vector_index.py \
+    --source s3://your-bucket/processed-ethical-data.jsonl \
+    --embedding-endpoint syntharbiter-nim-embedding-prod \
+    --opensearch-endpoint https://your-opensearch-endpoint \
+    --index-name ethical-knowledge \
+    --batch-size 20
+```
+
+### Testing
+
+Verify the RAG system works:
+
+```bash
+python scripts/test_rag_system.py \
+    --embedding-endpoint syntharbiter-nim-embedding-prod \
+    --opensearch-endpoint https://your-opensearch-endpoint
+```
 
 ## Prerequisites
 

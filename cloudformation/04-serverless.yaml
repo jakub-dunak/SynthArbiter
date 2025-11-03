@@ -22,6 +22,11 @@ Parameters:
     Default: ''
     Description: Name of the frontend/auth stack to get Cognito information from
 
+  StorageStackName:
+    Type: String
+    Default: ''
+    Description: Name of the storage stack to get OpenSearch information from
+
 Resources:
   # S3 Bucket for Static Website
   WebsiteBucket:
@@ -149,13 +154,6 @@ Resources:
     Properties:
       EndpointName: !Sub 'syntharbiter-nim-reasoning-${EnvironmentName}'
       EndpointConfigName: !GetAtt NIMReasoningEndpointConfig.EndpointConfigName
-      VpcConfig:
-        SecurityGroupIds:
-          - !Ref SageMakerSecurityGroup
-        Subnets:
-          Fn::Split:
-            - ','
-            - Fn::ImportValue: !Sub '${NetworkStackName}-PrivateSubnetIds'
 
   # NIM Guardrails Microservice
   NIMGuardrailsModel:
@@ -176,35 +174,16 @@ Resources:
       EndpointConfigName: !Sub 'syntharbiter-nim-guardrails-config-${EnvironmentName}'
       ProductionVariants:
         - VariantName: primary
-          ContainerDefinition:
-            Image: 'nvcr.io/nvidia/nim/nvidia/llama-3.1-nemoguard-8b-content-safety:1.0.0'
-            ImageConfig:
-              RepositoryAccessMode: Vpc
-              RepositoryAuthConfig:
-                RepositoryCredentialsProviderArn: !GetAtt SageMakerAuthLambda.Arn
+          ModelName: !GetAtt NIMGuardrailsModel.ModelName
           InitialInstanceCount: 1
           InstanceType: ml.g5.2xlarge
           InitialVariantWeight: 1.0
-      VpcConfig:
-        SecurityGroupIds:
-          - !Ref SageMakerSecurityGroup
-        Subnets:
-          Fn::Split:
-            - ','
-            - Fn::ImportValue: !Sub '${NetworkStackName}-PrivateSubnetIds'
 
   NIMGuardrailsEndpoint:
     Type: AWS::SageMaker::Endpoint
     Properties:
       EndpointName: !Sub 'syntharbiter-nim-guardrails-${EnvironmentName}'
       EndpointConfigName: !GetAtt NIMGuardrailsEndpointConfig.EndpointConfigName
-      VpcConfig:
-        SecurityGroupIds:
-          - !Ref SageMakerSecurityGroup
-        Subnets:
-          Fn::Split:
-            - ','
-            - Fn::ImportValue: !Sub '${NetworkStackName}-PrivateSubnetIds'
 
   # NIM Evaluator Microservice
   NIMEvaluatorModel:
@@ -225,35 +204,46 @@ Resources:
       EndpointConfigName: !Sub 'syntharbiter-nim-evaluator-config-${EnvironmentName}'
       ProductionVariants:
         - VariantName: primary
-          ContainerDefinition:
-            Image: 'nvcr.io/nvidia/nim/nvidia/nemo-evaluator:1.0.0'
-            ImageConfig:
-              RepositoryAccessMode: Vpc
-              RepositoryAuthConfig:
-                RepositoryCredentialsProviderArn: !GetAtt SageMakerAuthLambda.Arn
+          ModelName: !GetAtt NIMEvaluatorModel.ModelName
           InitialInstanceCount: 1
           InstanceType: ml.g5.2xlarge
           InitialVariantWeight: 1.0
-      VpcConfig:
-        SecurityGroupIds:
-          - !Ref SageMakerSecurityGroup
-        Subnets:
-          Fn::Split:
-            - ','
-            - Fn::ImportValue: !Sub '${NetworkStackName}-PrivateSubnetIds'
 
   NIMEvaluatorEndpoint:
     Type: AWS::SageMaker::Endpoint
     Properties:
       EndpointName: !Sub 'syntharbiter-nim-evaluator-${EnvironmentName}'
       EndpointConfigName: !GetAtt NIMEvaluatorEndpointConfig.EndpointConfigName
-      VpcConfig:
-        SecurityGroupIds:
-          - !Ref SageMakerSecurityGroup
-        Subnets:
-          Fn::Split:
-            - ','
-            - Fn::ImportValue: !Sub '${NetworkStackName}-PrivateSubnetIds'
+
+  # NIM Embedding Microservice
+  NIMEmbeddingModel:
+    Type: AWS::SageMaker::Model
+    Properties:
+      ModelName: !Sub 'syntharbiter-nim-embedding-${EnvironmentName}'
+      PrimaryContainer:
+        Image: 'nvcr.io/nvidia/nim/nvidia/nv-embedqa-e5-v5:1.0.1'
+        ImageConfig:
+          RepositoryAccessMode: Vpc
+          RepositoryAuthConfig:
+            RepositoryCredentialsProviderArn: !GetAtt SageMakerAuthLambda.Arn
+      ExecutionRoleArn: !GetAtt SageMakerExecutionRole.Arn
+
+  NIMEmbeddingEndpointConfig:
+    Type: AWS::SageMaker::EndpointConfig
+    Properties:
+      EndpointConfigName: !Sub 'syntharbiter-nim-embedding-config-${EnvironmentName}'
+      ProductionVariants:
+        - VariantName: primary
+          ModelName: !GetAtt NIMEmbeddingModel.ModelName
+          InitialInstanceCount: 1
+          InstanceType: ml.g5.2xlarge
+          InitialVariantWeight: 1.0
+
+  NIMEmbeddingEndpoint:
+    Type: AWS::SageMaker::Endpoint
+    Properties:
+      EndpointName: !Sub 'syntharbiter-nim-embedding-${EnvironmentName}'
+      EndpointConfigName: !GetAtt NIMEmbeddingEndpointConfig.EndpointConfigName
 
   # Lambda Functions
   AnalyzeLambda:
@@ -271,6 +261,9 @@ Resources:
           NIM_ENDPOINT_NAME: !Ref NIMReasoningEndpoint
           GUARDRAILS_ENDPOINT_NAME: !Ref NIMGuardrailsEndpoint
           EVALUATOR_ENDPOINT_NAME: !Ref NIMEvaluatorEndpoint
+          EMBEDDING_ENDPOINT_NAME: !Ref NIMEmbeddingEndpoint
+          OPENSEARCH_ENDPOINT:
+            Fn::ImportValue: !Sub '${StorageStackName}-OpenSearchEndpoint'
           DYNAMODB_TABLE_NAME: !Ref AnalysisHistoryTable
           USER_POOL_ID:
             Fn::ImportValue: !Sub '${FrontendStackName}-UserPoolId'
@@ -422,6 +415,15 @@ Resources:
                   - !Sub 'arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:endpoint/${NIMReasoningEndpoint}'
                   - !Sub 'arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:endpoint/${NIMGuardrailsEndpoint}'
                   - !Sub 'arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:endpoint/${NIMEvaluatorEndpoint}'
+                  - !Sub 'arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:endpoint/${NIMEmbeddingEndpoint}'
+              - Effect: Allow
+                Action:
+                  - es:ESHttpGet
+                  - es:ESHttpPost
+                  - es:ESHttpPut
+                  - es:ESHttpDelete
+                Resource:
+                  - Fn::ImportValue: !Sub '${StorageStackName}-OpenSearchARN'
 
   SageMakerAuthLambda:
     Type: AWS::Lambda::Function

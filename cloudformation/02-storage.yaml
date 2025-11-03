@@ -98,6 +98,56 @@ Resources:
       SSESpecification:
         SSEEnabled: true
 
+  # OpenSearch Domain for Vector Search
+  OpenSearchDomain:
+    Type: AWS::OpenSearchService::Domain
+    Properties:
+      DomainName: !Sub 'syntharbiter-opensearch-${AWS::AccountId}'
+      EngineVersion: OpenSearch_2.11
+      ClusterConfig:
+        InstanceType: t3.small.search
+        InstanceCount: 1
+      EBSOptions:
+        EBSEnabled: true
+        VolumeType: gp3
+        VolumeSize: 20
+      EncryptionAtRestOptions:
+        Enabled: true
+      NodeToNodeEncryptionOptions:
+        Enabled: true
+      DomainEndpointOptions:
+        EnforceHTTPS: true
+        TLSSecurityPolicy: Policy-Min-TLS-1-2-2019
+      AdvancedOptions:
+        'override_main_response_version': 'true'
+        'knn': 'true'  # Enable k-NN for vector search
+      AccessPolicies:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'es:*'
+            Resource: !Sub 'arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/syntharbiter-opensearch-${AWS::AccountId}/*'
+      VPCOptions:
+        SubnetIds: !Split
+          - ','
+          - Fn::ImportValue: !Sub '${AWS::StackName}-PrivateSubnetIds'
+        SecurityGroupIds:
+          - !Ref OpenSearchSecurityGroup
+
+  OpenSearchSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for OpenSearch domain
+      VpcId:
+        Fn::ImportValue: !Sub '${AWS::StackName}-VpcId'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 10.0.0.0/16  # VPC CIDR
+
 
 Outputs:
   DataRawBucketName:
@@ -130,4 +180,16 @@ Outputs:
     Value: !Ref AnalysisHistoryTable
     Export:
       Name: !Sub '${AWS::StackName}-AnalysisHistoryTable'
+
+  OpenSearchEndpoint:
+    Description: OpenSearch domain endpoint
+    Value: !GetAtt OpenSearchDomain.DomainEndpoint
+    Export:
+      Name: !Sub '${AWS::StackName}-OpenSearchEndpoint'
+
+  OpenSearchARN:
+    Description: OpenSearch domain ARN
+    Value: !GetAtt OpenSearchDomain.DomainArn
+    Export:
+      Name: !Sub '${AWS::StackName}-OpenSearchARN'
 

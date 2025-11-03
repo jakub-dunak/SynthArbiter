@@ -8,15 +8,58 @@ import logging
 import argparse
 from pathlib import Path
 import boto3
-from typing import List, Dict
+from typing import List, Dict, Optional
 import time
+import os
 
 # Import service clients
-from services.nemo_retriever_client import NeMoRetrieverClient
 from services.opensearch_client import VectorStore
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Initialize SageMaker client
+sagemaker = boto3.client('sagemaker-runtime')
+
+def generate_embeddings_nim(texts: List[str], endpoint_name: str, batch_size: int = 10) -> List[List[float]]:
+    """Generate embeddings using NIM embedding model"""
+    all_embeddings = []
+
+    # Process in smaller batches to avoid payload limits
+    for i in range(0, len(texts), batch_size):
+        batch_texts = texts[i:i+batch_size]
+
+        try:
+            payload = {
+                'input': batch_texts,
+                'model': 'nvidia/nv-embedqa-e5-v5',
+                'encoding_format': 'float'
+            }
+
+            response = sagemaker.invoke_endpoint(
+                EndpointName=endpoint_name,
+                ContentType='application/json',
+                Body=json.dumps(payload)
+            )
+
+            result = json.loads(response['Body'].read().decode('utf-8'))
+
+            # Extract embeddings from NIM response
+            if 'data' in result and result['data']:
+                batch_embeddings = [item.get('embedding', []) for item in result['data']]
+                all_embeddings.extend(batch_embeddings)
+                logger.debug(f"Generated embeddings for batch {i//batch_size + 1}: {len(batch_embeddings)} vectors")
+            else:
+                logger.error(f"Unexpected embedding response format: {result}")
+                # Add empty embeddings for failed batch
+                all_embeddings.extend([[] for _ in batch_texts])
+
+        except Exception as e:
+            logger.error(f"Embedding generation failed for batch {i//batch_size + 1}: {e}")
+            # Add empty embeddings for failed batch
+            all_embeddings.extend([[] for _ in batch_texts])
+
+    return all_embeddings
 
 def load_corpus_from_s3(bucket: str, key: str) -> List[Dict]:
     """Load preprocessed corpus from S3"""
@@ -53,21 +96,27 @@ def main():
                        help='OpenSearch index name')
     parser.add_argument('--batch-size', type=int, default=50,
                        help='Batch size for embedding generation')
-    parser.add_argument('--opensearch-endpoint', 
+    parser.add_argument('--opensearch-endpoint',
                        default=None,
                        help='OpenSearch endpoint URL')
+    parser.add_argument('--embedding-endpoint',
+                       default=None,
+                       help='SageMaker embedding endpoint name')
     
     args = parser.parse_args()
     
     # Initialize clients
     logger.info("Initializing clients...")
-    retriever = NeMoRetrieverClient()
-    
+
+    # Check required parameters
+    if not args.embedding_endpoint:
+        logger.error("Embedding endpoint is required (--embedding-endpoint)")
+        return
+
     # Initialize vector store
     if args.opensearch_endpoint:
-        import os
         os.environ['OPENSEARCH_ENDPOINT'] = args.opensearch_endpoint
-    
+
     vector_store = VectorStore()
     
     # Create index
@@ -114,9 +163,9 @@ def main():
                 logger.warning("No valid texts in batch, skipping")
                 continue
             
-            # Generate embeddings
+            # Generate embeddings using NIM
             logger.debug(f"Generating embeddings for {len(texts)} texts...")
-            embeddings = retriever.embed_batch(texts)
+            embeddings = generate_embeddings_nim(texts, args.embedding_endpoint, batch_size=10)
             
             if len(embeddings) != len(texts):
                 logger.error(f"Embedding count mismatch: got {len(embeddings)}, expected {len(texts)}")
