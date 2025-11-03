@@ -140,9 +140,12 @@ Resources:
             Action: 'es:*'
             Resource: !Sub 'arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/syntharbiter-os-${EnvironmentName}/*'
       VPCOptions:
-        SubnetIds: !Split
-          - ','
-          - Fn::ImportValue: !Sub '${NetworkStackName}-PrivateSubnetIds'
+        SubnetIds:
+          - Fn::Select:
+              - 0
+              - Fn::Split:
+                  - ','
+                  - Fn::ImportValue: !Sub '${NetworkStackName}-PrivateSubnetIds'
         SecurityGroupIds:
           - !Ref OpenSearchSecurityGroup
 
