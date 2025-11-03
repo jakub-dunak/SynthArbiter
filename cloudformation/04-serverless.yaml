@@ -28,6 +28,76 @@ Parameters:
     Description: Name of the storage stack to get OpenSearch information from
 
 Resources:
+
+  # ECR Repositories for NIM models
+  NIMReasoningRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub 'syntharbiter-nim-reasoning'
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      EncryptionConfiguration:
+        EncryptionType: AES256
+
+  NIMGuardrailsRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub 'syntharbiter-nim-guardrails'
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      EncryptionConfiguration:
+        EncryptionType: AES256
+
+  NIMEmbeddingRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub 'syntharbiter-nim-embedding'
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      EncryptionConfiguration:
+        EncryptionType: AES256
+
+  # VPC Endpoints for ECR and S3 access
+  ECRApiEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId:
+        Fn::ImportValue: !Sub '${NetworkStackName}-VpcId'
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ecr.api'
+      VpcEndpointType: Interface
+      SubnetIds:
+        Fn::Split:
+          - ','
+          - Fn::ImportValue: !Sub '${NetworkStackName}-PrivateSubnetIds'
+      SecurityGroupIds:
+        - !Ref SageMakerSecurityGroup
+
+  ECRDkrEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId:
+        Fn::ImportValue: !Sub '${NetworkStackName}-VpcId'
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ecr.dkr'
+      VpcEndpointType: Interface
+      SubnetIds:
+        Fn::Split:
+          - ','
+          - Fn::ImportValue: !Sub '${NetworkStackName}-PrivateSubnetIds'
+      SecurityGroupIds:
+        - !Ref SageMakerSecurityGroup
+
+  S3GatewayEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId:
+        Fn::ImportValue: !Sub '${NetworkStackName}-VpcId'
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.s3'
+      VpcEndpointType: Gateway
+      RouteTableIds:
+        Fn::Split:
+          - ','
+          - Fn::ImportValue: !Sub '${NetworkStackName}-PrivateRouteTableIds'
+
   # S3 Bucket for Static Website
   WebsiteBucket:
     Type: AWS::S3::Bucket
@@ -129,13 +199,11 @@ Resources:
     Properties:
       ModelName: !Sub 'syntharbiter-nim-reasoning-${EnvironmentName}'
       PrimaryContainer:
-        Image: 'nvcr.io/nim/nvidia/llama-3.1-nemotron-nano-8b-v1:1.0.0'
+        Image: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/syntharbiter-nim-reasoning:latest'
         Environment:
           NIM_MODEL_PROFILE: '09e2f8e68f78ce94bf79d15b40a21333cea5d09dbe01ede63f6c957f4fcfab7b'
         ImageConfig:
           RepositoryAccessMode: Vpc
-          RepositoryAuthConfig:
-            RepositoryCredentialsProviderArn: !GetAtt SageMakerAuthLambda.Arn
       ExecutionRoleArn: !GetAtt SageMakerExecutionRole.Arn
       VpcConfig:
         SecurityGroupIds:
@@ -171,11 +239,9 @@ Resources:
     Properties:
       ModelName: !Sub 'syntharbiter-nim-guardrails-${EnvironmentName}'
       PrimaryContainer:
-        Image: 'nvcr.io/nim/nvidia/llama-3.1-nemoguard-8b-content-safety:1.0.0'
+        Image: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/syntharbiter-nim-guardrails:latest'
         ImageConfig:
           RepositoryAccessMode: Vpc
-          RepositoryAuthConfig:
-            RepositoryCredentialsProviderArn: !GetAtt SageMakerAuthLambda.Arn
       ExecutionRoleArn: !GetAtt SageMakerExecutionRole.Arn
       VpcConfig:
         SecurityGroupIds:
@@ -212,11 +278,9 @@ Resources:
     Properties:
       ModelName: !Sub 'syntharbiter-nim-embedding-${EnvironmentName}'
       PrimaryContainer:
-        Image: 'nvcr.io/nim/nvidia/nv-embedqa-e5-v5:1.0.1'
+        Image: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/syntharbiter-nim-embedding:latest'
         ImageConfig:
           RepositoryAccessMode: Vpc
-          RepositoryAuthConfig:
-            RepositoryCredentialsProviderArn: !GetAtt SageMakerAuthLambda.Arn
       ExecutionRoleArn: !GetAtt SageMakerExecutionRole.Arn
       VpcConfig:
         SecurityGroupIds:
@@ -416,6 +480,15 @@ Resources:
                   - !Sub 'arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:endpoint/${NIMEmbeddingEndpoint}'
               - Effect: Allow
                 Action:
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:BatchGetImage
+                  - ecr:BatchCheckLayerAvailability
+                Resource:
+                  - !Sub 'arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/syntharbiter-nim-reasoning'
+                  - !Sub 'arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/syntharbiter-nim-guardrails'
+                  - !Sub 'arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/syntharbiter-nim-embedding'
+              - Effect: Allow
+                Action:
                   - es:ESHttpGet
                   - es:ESHttpPost
                   - es:ESHttpPut
@@ -571,6 +644,25 @@ Resources:
                 Fn::ImportValue: !Sub '${FrontendStackName}-UserPoolId'
 
 Outputs:
+
+  NIMReasoningRepositoryURI:
+    Description: ECR repository URI for NIM reasoning model
+    Value: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/syntharbiter-nim-reasoning'
+    Export:
+      Name: !Sub '${AWS::StackName}-NIMReasoningRepositoryURI'
+
+  NIMGuardrailsRepositoryURI:
+    Description: ECR repository URI for NIM guardrails model
+    Value: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/syntharbiter-nim-guardrails'
+    Export:
+      Name: !Sub '${AWS::StackName}-NIMGuardrailsRepositoryURI'
+
+  NIMEmbeddingRepositoryURI:
+    Description: ECR repository URI for NIM embedding model
+    Value: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/syntharbiter-nim-embedding'
+    Export:
+      Name: !Sub '${AWS::StackName}-NIMEmbeddingRepositoryURI'
+
   WebsiteURL:
     Description: Amplify app URL with automated S3 deployment
     Value: !GetAtt AmplifyApp.DefaultDomain

@@ -71,12 +71,83 @@ jobs:
             echo "✓ Updated NGC API key secret"
           fi
 
-  deploy-infrastructure:
+  setup-nim-ecr:
     runs-on: ubuntu-latest
     permissions:
       id-token: write
       contents: read
     needs: setup-parameters
+    env:
+      AWS_REGION: ${{ inputs.region || 'us-east-1' }}
+      ENVIRONMENT: ${{ inputs.environment || 'dev' }}
+    steps:
+      - name: Setup Docker
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y docker.io
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-session-name: GitHubActions-SynthArbiter-NIM
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup NIM ECR Images
+        run: |
+          ACCOUNT_ID=${{ secrets.AWS_ACCOUNT_ID }}
+
+          echo "🔐 Authenticating with NGC..."
+          docker login nvcr.io --username '$oauthtoken' --password ${{ secrets.NVIDIA_NGC_API_KEY }}
+
+          echo "🔐 Authenticating with ECR..."
+          aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin $ACCOUNT_ID.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com
+
+          # Function to push NIM image to ECR
+          push_nim_to_ecr() {
+            local nim_image="$1"
+            local ecr_repo="$2"
+            local ecr_uri="$ACCOUNT_ID.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/$ecr_repo:latest"
+
+            echo "📦 Processing $ecr_repo..."
+
+            # Pull NIM image
+            echo "Pulling $nim_image..."
+            docker pull "$nim_image" || {
+              echo "❌ Failed to pull $nim_image"
+              return 1
+            }
+
+            # Tag for ECR
+            echo "Tagging for ECR..."
+            docker tag "$nim_image" "$ecr_uri"
+
+            # Push to ECR
+            echo "Pushing to ECR..."
+            docker push "$ecr_uri" || {
+              echo "❌ Failed to push $ecr_uri"
+              return 1
+            }
+
+            # Clean up
+            echo "🧹 Cleaning up..."
+            docker rmi "$nim_image" "$ecr_uri" 2>/dev/null || true
+
+            echo "✅ Successfully processed $ecr_repo"
+          }
+
+          # Push all NIM images
+          push_nim_to_ecr "nvcr.io/nim/nvidia/llama-3.1-nemotron-nano-8b-v1:1.0.0" "syntharbiter-nim-reasoning"
+          push_nim_to_ecr "nvcr.io/nim/nvidia/llama-3.1-nemoguard-8b-content-safety:1.0.0" "syntharbiter-nim-guardrails"
+          push_nim_to_ecr "nvcr.io/nim/nvidia/nv-embedqa-e5-v5:1.0.1" "syntharbiter-nim-embedding"
+
+          echo "🎉 NIM ECR setup complete!"
+
+  deploy-infrastructure:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    needs: [setup-parameters, setup-nim-ecr]
     env:
       AWS_REGION: ${{ inputs.region || 'us-east-1' }}
       ENVIRONMENT: ${{ inputs.environment || 'dev' }}

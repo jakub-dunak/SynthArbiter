@@ -122,6 +122,17 @@ python scripts/test_rag_system.py \
 - GitHub repository access for CI/CD deployment
 - GitHub account (for CI/CD)
 
+## NIM Model Setup
+
+NVIDIA NIM images are automatically pushed to ECR during deployment (one-time setup per environment). The workflow handles:
+
+- ECR repository creation
+- NIM image pull from NGC
+- Image push to ECR
+- VPC endpoint configuration for ECR access
+
+No manual setup required - the workflow manages everything automatically.
+
 ## Deployment
 
 ### 1. Configure AWS Credentials
