@@ -145,6 +145,13 @@ Resources:
           InitialInstanceCount: 1
           InstanceType: ml.g5.2xlarge
           InitialVariantWeight: 1.0
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref SageMakerSecurityGroup
+        Subnets:
+          Fn::Split:
+            - ','
+            - Fn::ImportValue: !Sub '${NetworkStackName}-PrivateSubnetIds'
 
   NIMReasoningEndpoint:
     Type: AWS::SageMaker::Endpoint
@@ -182,6 +189,13 @@ Resources:
           InitialInstanceCount: 1
           InstanceType: ml.g5.2xlarge
           InitialVariantWeight: 1.0
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref SageMakerSecurityGroup
+        Subnets:
+          Fn::Split:
+            - ','
+            - Fn::ImportValue: !Sub '${NetworkStackName}-PrivateSubnetIds'
 
   NIMGuardrailsEndpoint:
     Type: AWS::SageMaker::Endpoint
@@ -219,6 +233,13 @@ Resources:
           InitialInstanceCount: 1
           InstanceType: ml.g5.2xlarge
           InitialVariantWeight: 1.0
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref SageMakerSecurityGroup
+        Subnets:
+          Fn::Split:
+            - ','
+            - Fn::ImportValue: !Sub '${NetworkStackName}-PrivateSubnetIds'
 
   NIMEvaluatorEndpoint:
     Type: AWS::SageMaker::Endpoint
