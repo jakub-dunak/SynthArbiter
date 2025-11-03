@@ -150,7 +150,7 @@ Resources:
     Type: AWS::SageMaker::Endpoint
     Properties:
       EndpointName: !Sub 'syntharbiter-nim-reasoning-${EnvironmentName}'
-      EndpointConfigName: !Ref NIMReasoningEndpointConfig
+      EndpointConfigName: !GetAtt NIMReasoningEndpointConfig.EndpointConfigName
 
   # NIM Guardrails Microservice
   NIMGuardrailsModel:
@@ -187,7 +187,7 @@ Resources:
     Type: AWS::SageMaker::Endpoint
     Properties:
       EndpointName: !Sub 'syntharbiter-nim-guardrails-${EnvironmentName}'
-      EndpointConfigName: !Ref NIMGuardrailsEndpointConfig
+      EndpointConfigName: !GetAtt NIMGuardrailsEndpointConfig.EndpointConfigName
 
   # NIM Evaluator Microservice
   NIMEvaluatorModel:
@@ -224,7 +224,7 @@ Resources:
     Type: AWS::SageMaker::Endpoint
     Properties:
       EndpointName: !Sub 'syntharbiter-nim-evaluator-${EnvironmentName}'
-      EndpointConfigName: !Ref NIMEvaluatorEndpointConfig
+      EndpointConfigName: !GetAtt NIMEvaluatorEndpointConfig.EndpointConfigName
 
   # Lambda Functions
   AnalyzeLambda:
