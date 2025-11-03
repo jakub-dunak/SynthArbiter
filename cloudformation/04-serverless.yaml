@@ -125,7 +125,7 @@ Resources:
         ImageConfig:
           RepositoryAccessMode: Vpc
           RepositoryAuthConfig:
-            RepositoryCredentialsProviderArn: !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/syntharbiter/nvidia-ngc-api-key'
+            RepositoryCredentialsProviderArn: !GetAtt SageMakerAuthLambda.Arn
       ExecutionRoleArn: !GetAtt SageMakerExecutionRole.Arn
       VpcConfig:
         SecurityGroupIds:
@@ -162,7 +162,7 @@ Resources:
         ImageConfig:
           RepositoryAccessMode: Vpc
           RepositoryAuthConfig:
-            RepositoryCredentialsProviderArn: !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/syntharbiter/nvidia-ngc-api-key'
+            RepositoryCredentialsProviderArn: !GetAtt SageMakerAuthLambda.Arn
       ExecutionRoleArn: !GetAtt SageMakerExecutionRole.Arn
       VpcConfig:
         SecurityGroupIds:
@@ -199,7 +199,7 @@ Resources:
         ImageConfig:
           RepositoryAccessMode: Vpc
           RepositoryAuthConfig:
-            RepositoryCredentialsProviderArn: !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/syntharbiter/nvidia-ngc-api-key'
+            RepositoryCredentialsProviderArn: !GetAtt SageMakerAuthLambda.Arn
       ExecutionRoleArn: !GetAtt SageMakerExecutionRole.Arn
       VpcConfig:
         SecurityGroupIds:
@@ -393,6 +393,75 @@ Resources:
                   - !Sub 'arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:endpoint/${NIMReasoningEndpoint}'
                   - !Sub 'arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:endpoint/${NIMGuardrailsEndpoint}'
                   - !Sub 'arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:endpoint/${NIMEvaluatorEndpoint}'
+
+  SageMakerAuthLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'syntharbiter-sagemaker-auth-${EnvironmentName}'
+      Runtime: python3.9
+      Handler: index.handler
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import base64
+          from botocore.exceptions import ClientError
+
+          def get_secret():
+              secret_name = "/syntharbiter/nvidia-ngc-api-key"
+              region_name = boto3.session.Session().region_name
+
+              session = boto3.session.Session()
+              client = session.client(
+                  service_name='secretsmanager',
+                  region_name=region_name
+              )
+
+              try:
+                  get_secret_value_response = client.get_secret_value(
+                      SecretId=secret_name
+                  )
+              except ClientError as e:
+                  raise e
+
+              secret = get_secret_value_response['SecretString']
+              return json.loads(secret)
+
+          def handler(event, context):
+              try:
+                  creds = get_secret()
+                  return {
+                      'username': creds['username'],
+                      'password': creds['password']
+                  }
+              except Exception as e:
+                  print(f"Error getting credentials: {e}")
+                  raise e
+      Role: !GetAtt SageMakerAuthLambdaRole.Arn
+      Timeout: 30
+
+  SageMakerAuthLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'syntharbiter-sagemaker-auth-lambda-${EnvironmentName}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: SageMakerSecretsAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/syntharbiter/nvidia-ngc-api-key*'
 
   SageMakerExecutionRole:
     Type: AWS::IAM::Role
