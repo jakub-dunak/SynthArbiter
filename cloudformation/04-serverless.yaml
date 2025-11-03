@@ -122,6 +122,8 @@ Resources:
         Image: 'nvcr.io/nvidia/nim/meta/llama-3.1-nemotron-nano-8b-v1:1.0.0'
         Environment:
           NIM_MODEL_PROFILE: '09e2f8e68f78ce94bf79d15b40a21333cea5d09dbe01ede63f6c957f4fcfab7b'
+        ImageConfig:
+          RepositoryAccessMode: Vpc
       ExecutionRoleArn: !GetAtt SageMakerExecutionRole.Arn
       VpcConfig:
         SecurityGroupIds:
@@ -155,6 +157,8 @@ Resources:
       ModelName: !Sub 'syntharbiter-nim-guardrails-${EnvironmentName}'
       PrimaryContainer:
         Image: 'nvcr.io/nvidia/nim/nvidia/llama-3.1-nemoguard-8b-content-safety:1.0.0'
+        ImageConfig:
+          RepositoryAccessMode: Vpc
       ExecutionRoleArn: !GetAtt SageMakerExecutionRole.Arn
       VpcConfig:
         SecurityGroupIds:
@@ -188,6 +192,8 @@ Resources:
       ModelName: !Sub 'syntharbiter-nim-evaluator-${EnvironmentName}'
       PrimaryContainer:
         Image: 'nvcr.io/nvidia/nim/nvidia/nemo-evaluator:1.0.0'
+        ImageConfig:
+          RepositoryAccessMode: Vpc
       ExecutionRoleArn: !GetAtt SageMakerExecutionRole.Arn
       VpcConfig:
         SecurityGroupIds:
