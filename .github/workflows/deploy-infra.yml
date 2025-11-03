@@ -112,10 +112,21 @@ jobs:
 
             # Pull NIM image
             echo "Pulling $nim_image..."
-            docker pull "$nim_image" || {
+            if ! docker pull "$nim_image"; then
               echo "❌ Failed to pull $nim_image"
+              echo "🔍 Checking if image exists..."
+              if docker manifest inspect "$nim_image" 2>/dev/null; then
+                echo "❓ Image manifest exists but pull failed - may be authentication or network issue"
+                echo "💡 Try: docker pull $nim_image"
+              else
+                echo "❌ Image does not exist: $nim_image"
+                echo "🔍 This could mean:"
+                echo "   - Wrong image path"
+                echo "   - Image was renamed or moved"
+                echo "   - Tag doesn't exist (try different version)"
+              fi
               return 1
-            }
+            fi
 
             # Tag for ECR
             echo "Tagging for ECR..."
@@ -123,10 +134,10 @@ jobs:
 
             # Push to ECR
             echo "Pushing to ECR..."
-            docker push "$ecr_uri" || {
+            if ! docker push "$ecr_uri"; then
               echo "❌ Failed to push $ecr_uri"
               return 1
-            }
+            fi
 
             # Clean up
             echo "🧹 Cleaning up..."
@@ -135,10 +146,31 @@ jobs:
             echo "✅ Successfully processed $ecr_repo"
           }
 
-          # Push all NIM images
-          push_nim_to_ecr "nvcr.io/nim/nvidia/llama-3.1-nemotron-nano-8b-v1:1.0.0" "syntharbiter-nim-reasoning"
-          push_nim_to_ecr "nvcr.io/nim/nvidia/llama-3.1-nemoguard-8b-content-safety:1.0.0" "syntharbiter-nim-guardrails"
-          push_nim_to_ecr "nvcr.io/nim/nvidia/nv-embedqa-e5-v5:1.0.1" "syntharbiter-nim-embedding"
+          # Push all NIM images (try multiple variations if needed)
+          echo "🔍 Attempting to find correct NIM image paths..."
+
+          # Try different variations for reasoning model
+          if push_nim_to_ecr "nvcr.io/nvidia/nim/llama3-1-nemotron-nano-8b-v1:latest" "syntharbiter-nim-reasoning"; then
+            echo "✅ Found reasoning model: nvcr.io/nvidia/nim/llama3-1-nemotron-nano-8b-v1:latest"
+          elif push_nim_to_ecr "nvcr.io/nim/nvidia/llama-3.1-nemotron-nano-8b-v1:latest" "syntharbiter-nim-reasoning"; then
+            echo "✅ Found reasoning model: nvcr.io/nim/nvidia/llama-3.1-nemotron-nano-8b-v1:latest"
+          else
+            echo "❌ Could not find reasoning model - trying to continue with other models"
+          fi
+
+          # Guardrails model
+          if push_nim_to_ecr "nvcr.io/nim/nvidia/llama-3.1-nemoguard-8b-content-safety:latest" "syntharbiter-nim-guardrails"; then
+            echo "✅ Found guardrails model"
+          else
+            echo "❌ Could not find guardrails model"
+          fi
+
+          # Embedding model
+          if push_nim_to_ecr "nvcr.io/nim/nvidia/nv-embedqa-e5-v5:latest" "syntharbiter-nim-embedding"; then
+            echo "✅ Found embedding model"
+          else
+            echo "❌ Could not find embedding model"
+          fi
 
           echo "🎉 NIM ECR setup complete!"
 
