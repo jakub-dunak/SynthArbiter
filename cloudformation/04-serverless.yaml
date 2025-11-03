@@ -174,8 +174,13 @@ Resources:
         Image: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/syntharbiter-nim-reasoning:latest'
         Environment:
           NIM_MODEL_PROFILE: '09e2f8e68f78ce94bf79d15b40a21333cea5d09dbe01ede63f6c957f4fcfab7b'
+          NIM_HTTP_API_PORT: '8000'
+          NIM_GRPC_API_PORT: '8001'
+          NIM_METRICS_PORT: '8002'
         ImageConfig:
           RepositoryAccessMode: Platform
+      ContainerStartupHealthCheckConfig:
+        HealthCheckSuccessTimeoutInSeconds: 900
       ExecutionRoleArn: !GetAtt SageMakerExecutionRole.Arn
       VpcConfig:
         SecurityGroupIds:
@@ -212,8 +217,14 @@ Resources:
       ModelName: !Sub 'syntharbiter-nim-guardrails-${EnvironmentName}'
       PrimaryContainer:
         Image: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/syntharbiter-nim-guardrails:latest'
+        Environment:
+          NIM_HTTP_API_PORT: '8000'
+          NIM_GRPC_API_PORT: '8001'
+          NIM_METRICS_PORT: '8002'
         ImageConfig:
           RepositoryAccessMode: Platform
+      ContainerStartupHealthCheckConfig:
+        HealthCheckSuccessTimeoutInSeconds: 900
       ExecutionRoleArn: !GetAtt SageMakerExecutionRole.Arn
       VpcConfig:
         SecurityGroupIds:
@@ -251,8 +262,14 @@ Resources:
       ModelName: !Sub 'syntharbiter-nim-embedding-${EnvironmentName}'
       PrimaryContainer:
         Image: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/syntharbiter-nim-embedding:latest'
+        Environment:
+          NIM_HTTP_API_PORT: '8000'
+          NIM_GRPC_API_PORT: '8001'
+          NIM_METRICS_PORT: '8002'
         ImageConfig:
           RepositoryAccessMode: Platform
+      ContainerStartupHealthCheckConfig:
+        HealthCheckSuccessTimeoutInSeconds: 900
       ExecutionRoleArn: !GetAtt SageMakerExecutionRole.Arn
       VpcConfig:
         SecurityGroupIds:
