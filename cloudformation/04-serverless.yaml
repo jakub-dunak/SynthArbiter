@@ -49,11 +49,16 @@ Resources:
       Bucket: !Ref WebsiteBucket
       PolicyDocument:
         Statement:
-          - Sid: PublicReadGetObject
+          - Sid: AmplifyDeploymentAccess
             Effect: Allow
-            Principal: '*'
-            Action: s3:GetObject
-            Resource: !Sub '${WebsiteBucket}/*'
+            Principal:
+              Service: amplify.amazonaws.com
+            Action:
+              - s3:GetObject
+              - s3:ListBucket
+            Resource:
+              - !Sub 'arn:aws:s3:::${WebsiteBucket}'
+              - !Sub 'arn:aws:s3:::${WebsiteBucket}/*'
 
   # Amplify App for automated S3 bucket deployment
   AmplifyApp:
