@@ -62,12 +62,12 @@ jobs:
           if ! aws secretsmanager describe-secret --secret-id /syntharbiter/nvidia-ngc-api-key 2>/dev/null; then
             aws secretsmanager create-secret \
               --name /syntharbiter/nvidia-ngc-api-key \
-              --secret-string "${{ secrets.NVIDIA_NGC_API_KEY }}"
+              --secret-string '{"username":"$oauthtoken","password":"${{ secrets.NVIDIA_NGC_API_KEY }}"}'
             echo "✓ Created NGC API key secret"
           else
             aws secretsmanager update-secret \
               --secret-id /syntharbiter/nvidia-ngc-api-key \
-              --secret-string "${{ secrets.NVIDIA_NGC_API_KEY }}"
+              --secret-string '{"username":"$oauthtoken","password":"${{ secrets.NVIDIA_NGC_API_KEY }}"}'
             echo "✓ Updated NGC API key secret"
           fi
 

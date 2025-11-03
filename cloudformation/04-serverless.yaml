@@ -124,6 +124,8 @@ Resources:
           NIM_MODEL_PROFILE: '09e2f8e68f78ce94bf79d15b40a21333cea5d09dbe01ede63f6c957f4fcfab7b'
         ImageConfig:
           RepositoryAccessMode: Vpc
+          RepositoryAuthConfig:
+            RepositoryCredentialsProviderArn: !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/syntharbiter/nvidia-ngc-api-key'
       ExecutionRoleArn: !GetAtt SageMakerExecutionRole.Arn
       VpcConfig:
         SecurityGroupIds:
@@ -159,6 +161,8 @@ Resources:
         Image: 'nvcr.io/nvidia/nim/nvidia/llama-3.1-nemoguard-8b-content-safety:1.0.0'
         ImageConfig:
           RepositoryAccessMode: Vpc
+          RepositoryAuthConfig:
+            RepositoryCredentialsProviderArn: !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/syntharbiter/nvidia-ngc-api-key'
       ExecutionRoleArn: !GetAtt SageMakerExecutionRole.Arn
       VpcConfig:
         SecurityGroupIds:
@@ -194,6 +198,8 @@ Resources:
         Image: 'nvcr.io/nvidia/nim/nvidia/nemo-evaluator:1.0.0'
         ImageConfig:
           RepositoryAccessMode: Vpc
+          RepositoryAuthConfig:
+            RepositoryCredentialsProviderArn: !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/syntharbiter/nvidia-ngc-api-key'
       ExecutionRoleArn: !GetAtt SageMakerExecutionRole.Arn
       VpcConfig:
         SecurityGroupIds:
