@@ -3,7 +3,6 @@
   "dev": {
     "nimReasoningModel": "meta/llama-3.1-nemotron-nano-8b-v1",
     "nimGuardrailsModel": "nvidia/llama-3.1-nemoguard-8b-content-safety",
-    "nimEvaluatorModel": "nvidia/nemo-evaluator",
     "nimEmbeddingModel": "nvidia/nv-embedqa-e5-v5",
     "instanceType": "ml.g5.2xlarge",
     "lambdaMemorySize": 2048,
@@ -13,7 +12,6 @@
   "prod": {
     "nimReasoningModel": "meta/llama-3.1-nemotron-nano-8b-v1",
     "nimGuardrailsModel": "nvidia/llama-3.1-nemoguard-8b-content-safety",
-    "nimEvaluatorModel": "nvidia/nemo-evaluator",
     "nimEmbeddingModel": "nvidia/nv-embedqa-e5-v5",
     "instanceType": "ml.g5.2xlarge",
     "lambdaMemorySize": 2048,

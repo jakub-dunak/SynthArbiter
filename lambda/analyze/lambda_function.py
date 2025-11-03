@@ -423,44 +423,14 @@ Provide a brief analysis."""
     return outcomes
 
 def evaluate_reasoning(state: Dict) -> Dict:
-    """Evaluate reasoning quality using evaluator Lambda"""
-    try:
-        evaluator_function = os.environ.get('EVALUATOR_FUNCTION_NAME', f'syntharbiter-evaluate-{os.environ.get("ENVIRONMENT", "prod")}')
-
-        evaluation_data = {
-            'scenario': state.get('scenario', ''),
-            'reasoning': ' '.join(state.get('reasoning_steps', [])),
-            'context': ' '.join([doc.get('text', '') for doc in state.get('retrieved_context', [])[:3]]),
-            'frameworks': state.get('frameworks', [])
-        }
-
-        response = lambda_client.invoke(
-            FunctionName=evaluator_function,
-            InvocationType='RequestResponse',
-            Payload=json.dumps(evaluation_data)
-        )
-
-        result = json.loads(response['Payload'].read())
-        scores = result.get('body', '{}')
-        if isinstance(scores, str):
-            scores = json.loads(scores)
-
-        return {
-            'context_relevance': scores.get('context_relevance', 0.8),
-            'reasoning_coherence': scores.get('reasoning_coherence', 0.8),
-            'ethical_coverage': scores.get('ethical_coverage', 0.8),
-            'overall_quality': scores.get('overall_quality', 0.8)
-        }
-
-    except Exception as e:
-        logger.error(f"Evaluator Lambda error: {e}")
-        # Fallback scoring
-        return {
-            'context_relevance': len(state.get('retrieved_context', [])) * 0.1,
-            'reasoning_coherence': len(state.get('reasoning_steps', [])) * 0.2,
-            'ethical_coverage': 0.8,
-            'overall_quality': 0.8
-        }
+    """Return default evaluation scores (evaluator not available)"""
+    logger.info("Using default evaluation scores (evaluator not configured)")
+    return {
+        'context_relevance': 0.8,
+        'reasoning_coherence': 0.8,
+        'ethical_coverage': 0.8,
+        'overall_quality': 0.8
+    }
 
 def synthesize_recommendation(state: Dict, frameworks: List[str]) -> str:
     """Synthesize final recommendation"""
