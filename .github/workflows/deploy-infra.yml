@@ -81,16 +81,16 @@ jobs:
       AWS_REGION: ${{ inputs.region || 'us-east-1' }}
       ENVIRONMENT: ${{ inputs.environment || 'dev' }}
     steps:
-      - name: Setup Docker
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y docker.io
-
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           role-session-name: GitHubActions-SynthArbiter-NIM
           aws-region: ${{ env.AWS_REGION }}
+
+      - name: Verify Docker
+        run: |
+          docker --version
+          docker info
 
       - name: Setup NIM ECR Images
         run: |
