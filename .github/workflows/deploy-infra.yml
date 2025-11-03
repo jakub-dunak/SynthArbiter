@@ -92,105 +92,105 @@ jobs:
           docker --version
           docker info
 
-                - name: Setup NIM ECR Images
-                  run: |
-                    ACCOUNT_ID=${{ secrets.AWS_ACCOUNT_ID }}
+      - name: Setup NIM ECR Images
+        run: |
+          ACCOUNT_ID=${{ secrets.AWS_ACCOUNT_ID }}
 
-                    echo "💾 Checking available disk space..."
-                    df -h
-                    echo "🧹 Initial cleanup..."
-                    docker system prune -a -f
+          echo "💾 Checking available disk space..."
+          df -h
+          echo "🧹 Initial cleanup..."
+          docker system prune -a -f
 
-                    echo "🔐 Authenticating with NGC..."
-                    docker login nvcr.io --username '$oauthtoken' --password ${{ secrets.NVIDIA_NGC_API_KEY }}
+          echo "🔐 Authenticating with NGC..."
+          docker login nvcr.io --username '$oauthtoken' --password "${{ secrets.NVIDIA_NGC_API_KEY }}"
 
-                    echo "🔐 Authenticating with ECR..."
-                    aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin $ACCOUNT_ID.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com
+          echo "🔐 Authenticating with ECR..."
+          aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin $ACCOUNT_ID.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com
 
-                    # Function to push NIM image to ECR
-                    push_nim_to_ecr() {
-                      local nim_image="$1"
-                      local ecr_repo="$2"
-                      local ecr_uri="$ACCOUNT_ID.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/$ecr_repo:latest"
+          # Function to push NIM image to ECR
+          push_nim_to_ecr() {
+            local nim_image="$1"
+            local ecr_repo="$2"
+            local ecr_uri="$ACCOUNT_ID.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/$ecr_repo:latest"
 
-                      echo "📦 Processing $ecr_repo..."
+            echo "📦 Processing $ecr_repo..."
 
-                      # Clean up any existing images first
-                      echo "🧹 Pre-cleanup..."
-                      docker system prune -f
-                      docker rmi "$ecr_uri" 2>/dev/null || true
+            # Clean up any existing images first
+            echo "🧹 Pre-cleanup..."
+            docker system prune -f
+            docker rmi "$ecr_uri" 2>/dev/null || true
 
-                      # Pull NIM image
-                      echo "Pulling $nim_image..."
-                      if ! docker pull "$nim_image"; then
-                        echo "❌ Failed to pull $nim_image"
-                        echo "🔍 Checking if image exists..."
-                        if docker manifest inspect "$nim_image" 2>/dev/null; then
-                          echo "❓ Image manifest exists but pull failed - may be authentication or network issue"
-                          echo "💡 Try: docker pull $nim_image"
-                        else
-                          echo "❌ Image does not exist: $nim_image"
-                          echo "🔍 This could mean:"
-                          echo "   - Wrong image path"
-                          echo "   - Image was renamed or moved"
-                          echo "   - Tag doesn't exist (try different version)"
-                        fi
-                        return 1
-                      fi
+            # Pull NIM image
+            echo "Pulling $nim_image..."
+            if ! docker pull "$nim_image"; then
+              echo "❌ Failed to pull $nim_image"
+              echo "🔍 Checking if image exists..."
+              if docker manifest inspect "$nim_image" 2>/dev/null; then
+                echo "❓ Image manifest exists but pull failed - may be authentication or network issue"
+                echo "💡 Try: docker pull $nim_image"
+              else
+                echo "❌ Image does not exist: $nim_image"
+                echo "🔍 This could mean:"
+                echo "   - Wrong image path"
+                echo "   - Image was renamed or moved"
+                echo "   - Tag doesn't exist (try different version)"
+              fi
+              return 1
+            fi
 
-                      # Tag for ECR
-                      echo "Tagging for ECR..."
-                      docker tag "$nim_image" "$ecr_uri"
+            # Tag for ECR
+            echo "Tagging for ECR..."
+            docker tag "$nim_image" "$ecr_uri"
 
-                      # Push to ECR
-                      echo "Pushing to ECR..."
-                      if ! docker push "$ecr_uri"; then
-                        echo "❌ Failed to push $ecr_uri"
-                        return 1
-                      fi
+            # Push to ECR
+            echo "Pushing to ECR..."
+            if ! docker push "$ecr_uri"; then
+              echo "❌ Failed to push $ecr_uri"
+              return 1
+            fi
 
-                      # Clean up immediately after push
-                      echo "🧹 Cleaning up..."
-                      docker rmi "$nim_image" "$ecr_uri" 2>/dev/null || true
-                      docker system prune -f
+            # Clean up immediately after push
+            echo "🧹 Cleaning up..."
+            docker rmi "$nim_image" "$ecr_uri" 2>/dev/null || true
+            docker system prune -f
 
-                      echo "✅ Successfully processed $ecr_repo"
-                    }
+            echo "✅ Successfully processed $ecr_repo"
+          }
 
-                    # Create ECR repositories first
-                    echo "🏗️ Creating ECR repositories..."
-                    aws ecr create-repository --repository-name syntharbiter-nim-reasoning --region ${{ env.AWS_REGION }} || echo "Repository may already exist"
-                    aws ecr create-repository --repository-name syntharbiter-nim-guardrails --region ${{ env.AWS_REGION }} || echo "Repository may already exist"
-                    aws ecr create-repository --repository-name syntharbiter-nim-embedding --region ${{ env.AWS_REGION }} || echo "Repository may already exist"
+          # Create ECR repositories first
+          echo "🏗️ Creating ECR repositories..."
+          aws ecr create-repository --repository-name syntharbiter-nim-reasoning --region ${{ env.AWS_REGION }} || echo "Repository may already exist"
+          aws ecr create-repository --repository-name syntharbiter-nim-guardrails --region ${{ env.AWS_REGION }} || echo "Repository may already exist"
+          aws ecr create-repository --repository-name syntharbiter-nim-embedding --region ${{ env.AWS_REGION }} || echo "Repository may already exist"
 
-                    # Push all NIM images (process one at a time to manage disk space)
-                    echo "🔍 Pushing NIM images to ECR..."
+          # Push all NIM images (process one at a time to manage disk space)
+          echo "🔍 Pushing NIM images to ECR..."
 
-                    # Reasoning model (smaller, process first)
-                    if push_nim_to_ecr "nvcr.io/nim/nvidia/llama-3.1-nemotron-nano-8b-v1:latest" "syntharbiter-nim-reasoning"; then
-                      echo "✅ Successfully pushed reasoning model"
-                    else
-                      echo "❌ Failed to push reasoning model"
-                      exit 1
-                    fi
+          # Reasoning model (smaller, process first)
+          if push_nim_to_ecr "nvcr.io/nim/nvidia/llama-3.1-nemotron-nano-8b-v1:latest" "syntharbiter-nim-reasoning"; then
+            echo "✅ Successfully pushed reasoning model"
+          else
+            echo "❌ Failed to push reasoning model"
+            exit 1
+          fi
 
-                    # Embedding model (medium size)
-                    if push_nim_to_ecr "nvcr.io/nim/nvidia/nv-embedqa-e5-v5:latest" "syntharbiter-nim-embedding"; then
-                      echo "✅ Successfully pushed embedding model"
-                    else
-                      echo "❌ Failed to push embedding model"
-                      exit 1
-                    fi
+          # Embedding model (medium size)
+          if push_nim_to_ecr "nvcr.io/nim/nvidia/nv-embedqa-e5-v5:latest" "syntharbiter-nim-embedding"; then
+            echo "✅ Successfully pushed embedding model"
+          else
+            echo "❌ Failed to push embedding model"
+            exit 1
+          fi
 
-                    # Guardrails model (largest, process last)
-                    if push_nim_to_ecr "nvcr.io/nim/nvidia/llama-3.1-nemoguard-8b-content-safety:latest" "syntharbiter-nim-guardrails"; then
-                      echo "✅ Successfully pushed guardrails model"
-                    else
-                      echo "❌ Failed to push guardrails model"
-                      exit 1
-                    fi
+          # Guardrails model (largest, process last)
+          if push_nim_to_ecr "nvcr.io/nim/nvidia/llama-3.1-nemoguard-8b-content-safety:latest" "syntharbiter-nim-guardrails"; then
+            echo "✅ Successfully pushed guardrails model"
+          else
+            echo "❌ Failed to push guardrails model"
+            exit 1
+          fi
 
-                    echo "🎉 NIM ECR setup complete!"
+          echo "🎉 NIM ECR setup complete!"
 
   deploy-infrastructure:
     runs-on: ubuntu-latest
