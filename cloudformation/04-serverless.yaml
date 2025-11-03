@@ -170,7 +170,7 @@ Resources:
     Properties:
       ModelName: !Sub 'syntharbiter-nim-guardrails-${EnvironmentName}'
       PrimaryContainer:
-        Image: 'nvcr.io/nvidia/nim/nvidia/llama-3.1-nemoguard-8b-content-safety:1.0.0'
+        Image: 'nvcr.io/nim/nvidia/llama-3.1-nemoguard-8b-content-safety:1.0.0'
         ImageConfig:
           RepositoryAccessMode: Vpc
           RepositoryAuthConfig:
@@ -209,7 +209,7 @@ Resources:
     Properties:
       ModelName: !Sub 'syntharbiter-nim-evaluator-${EnvironmentName}'
       PrimaryContainer:
-        Image: 'nvcr.io/nvidia/nim/nvidia/nemo-evaluator:1.0.0'
+        Image: 'nvcr.io/nim/nvidia/nemo-evaluator:1.0.0'
         ImageConfig:
           RepositoryAccessMode: Vpc
           RepositoryAuthConfig:
@@ -248,7 +248,7 @@ Resources:
     Properties:
       ModelName: !Sub 'syntharbiter-nim-embedding-${EnvironmentName}'
       PrimaryContainer:
-        Image: 'nvcr.io/nvidia/nim/nvidia/nv-embedqa-e5-v5:1.0.1'
+        Image: 'nvcr.io/nim/nvidia/nv-embedqa-e5-v5:1.0.1'
         ImageConfig:
           RepositoryAccessMode: Vpc
           RepositoryAuthConfig:
@@ -556,6 +556,10 @@ Resources:
                 Resource:
                   - 'arn:aws:s3:::jumpstart-cache-prod-*'
                   - !Sub 'arn:aws:s3:::syntharbiter-${EnvironmentName}-*'
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: !GetAtt SageMakerAuthLambda.Arn
 
   LambdaSecurityGroup:
     Type: AWS::EC2::SecurityGroup
