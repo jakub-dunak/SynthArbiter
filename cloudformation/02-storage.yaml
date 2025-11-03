@@ -1,6 +1,12 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'SynthArbiter - Storage Layer'
 
+Parameters:
+  NetworkStackName:
+    Type: String
+    Default: ''
+    Description: Name of the network stack to get VPC information from
+
 Resources:
   # S3 Buckets
   DataRawBucket:
@@ -141,7 +147,7 @@ Resources:
     Properties:
       GroupDescription: Security group for OpenSearch domain
       VpcId:
-        Fn::ImportValue: !Sub '${AWS::StackName}-VpcId'
+        Fn::ImportValue: !Sub '${NetworkStackName}-VpcId'
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 443

@@ -134,7 +134,7 @@ jobs:
           aws cloudformation deploy \
             --template-file cloudformation/02-storage.yaml \
             --stack-name syntharbiter-storage-${{ env.ENVIRONMENT }} \
-            --parameter-overrides EnvironmentName=${{ env.ENVIRONMENT }} \
+            --parameter-overrides EnvironmentName=${{ env.ENVIRONMENT }} NetworkStackName=syntharbiter-network-${{ env.ENVIRONMENT }} \
             --capabilities CAPABILITY_NAMED_IAM \
             --region ${{ env.AWS_REGION }} \
             --no-fail-on-empty-changeset
