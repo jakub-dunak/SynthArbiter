@@ -113,6 +113,18 @@ Resources:
       AllocationId: !GetAtt NATGatewayEIP2.AllocationId
       SubnetId: !Ref PublicSubnet2
 
+  NATGatewayEIP3:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+      Domain: vpc
+
+  NATGateway3:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NATGatewayEIP3.AllocationId
+      SubnetId: !Ref PublicSubnet3
+
   # Route Tables
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
@@ -190,6 +202,27 @@ Resources:
       DestinationCidrBlock: 0.0.0.0/0
       NatGatewayId: !Ref NATGateway2
 
+  PrivateRouteTable3:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: syntharbiter-private-routes-3
+
+  PrivateSubnet3RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable3
+      SubnetId: !Ref PrivateSubnet3
+
+  DefaultPrivateRoute3:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable3
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGateway3
+
   # Security Groups
 
   ALBSecurityGroup:
@@ -226,6 +259,14 @@ Outputs:
       - [!Ref PrivateSubnet1, !Ref PrivateSubnet2, !Ref PrivateSubnet3]
     Export:
       Name: !Sub '${AWS::StackName}-PrivateSubnetIds'
+
+  PrivateRouteTableIds:
+    Description: Private Route Table IDs
+    Value: !Join
+      - ','
+      - [!Ref PrivateRouteTable1, !Ref PrivateRouteTable2, !Ref PrivateRouteTable3]
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateRouteTableIds'
 
   PublicSubnetIds:
     Description: Public Subnet IDs

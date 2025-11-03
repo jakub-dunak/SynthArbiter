@@ -157,37 +157,93 @@ jobs:
             echo "✅ Successfully processed $ecr_repo"
           }
 
+          # Function to check if ECR image exists
+          check_ecr_image_exists() {
+            local repo_name="$1"
+            local image_tag="latest"
+            local ecr_uri="$ACCOUNT_ID.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/$repo_name:$image_tag"
+
+            echo "🔍 Checking if $ecr_uri exists..."
+
+            # Try to describe the image manifest
+            if aws ecr describe-images --repository-name "$repo_name" --image-ids imageTag="$image_tag" --region ${{ env.AWS_REGION }} >/dev/null 2>&1; then
+              echo "✅ Image $ecr_uri already exists - skipping push"
+              return 0
+            else
+              echo "❌ Image $ecr_uri not found - will push"
+              return 1
+            fi
+          }
+
           # Create ECR repositories first
           echo "🏗️ Creating ECR repositories..."
           aws ecr create-repository --repository-name syntharbiter-nim-reasoning --region ${{ env.AWS_REGION }} || echo "Repository may already exist"
           aws ecr create-repository --repository-name syntharbiter-nim-guardrails --region ${{ env.AWS_REGION }} || echo "Repository may already exist"
           aws ecr create-repository --repository-name syntharbiter-nim-embedding --region ${{ env.AWS_REGION }} || echo "Repository may already exist"
 
-          # Push all NIM images (process one at a time to manage disk space)
-          echo "🔍 Pushing NIM images to ECR..."
+          # Check which NIM images need to be pushed
+          echo "🔍 Checking which NIM images need to be pushed..."
 
-          # Reasoning model (smaller, process first)
-          if push_nim_to_ecr "nvcr.io/nim/nvidia/llama-3.1-nemotron-nano-8b-v1:latest" "syntharbiter-nim-reasoning"; then
-            echo "✅ Successfully pushed reasoning model"
-          else
-            echo "❌ Failed to push reasoning model"
-            exit 1
+          IMAGES_TO_PUSH=""
+
+          # Check Reasoning model
+          if ! check_ecr_image_exists "syntharbiter-nim-reasoning"; then
+            IMAGES_TO_PUSH="${IMAGES_TO_PUSH} reasoning"
           fi
 
-          # Embedding model (medium size)
-          if push_nim_to_ecr "nvcr.io/nim/nvidia/nv-embedqa-e5-v5:latest" "syntharbiter-nim-embedding"; then
-            echo "✅ Successfully pushed embedding model"
-          else
-            echo "❌ Failed to push embedding model"
-            exit 1
+          # Check Embedding model
+          if ! check_ecr_image_exists "syntharbiter-nim-embedding"; then
+            IMAGES_TO_PUSH="${IMAGES_TO_PUSH} embedding"
           fi
 
-          # Guardrails model (largest, process last)
-          if push_nim_to_ecr "nvcr.io/nim/nvidia/llama-3.1-nemoguard-8b-content-safety:latest" "syntharbiter-nim-guardrails"; then
-            echo "✅ Successfully pushed guardrails model"
+          # Check Guardrails model
+          if ! check_ecr_image_exists "syntharbiter-nim-guardrails"; then
+            IMAGES_TO_PUSH="${IMAGES_TO_PUSH} guardrails"
+          fi
+
+          # Only proceed with pushing if any images are missing
+          if [ -z "$IMAGES_TO_PUSH" ]; then
+            echo "🎉 All NIM images already exist in ECR - skipping image operations"
           else
-            echo "❌ Failed to push guardrails model"
-            exit 1
+            echo "📦 Need to push images: $IMAGES_TO_PUSH"
+
+            # Push all NIM images (process one at a time to manage disk space)
+
+            # Reasoning model (smaller, process first)
+            if echo "$IMAGES_TO_PUSH" | grep -q "reasoning"; then
+              if push_nim_to_ecr "nvcr.io/nim/nvidia/llama-3.1-nemotron-nano-8b-v1:latest" "syntharbiter-nim-reasoning"; then
+                echo "✅ Successfully pushed reasoning model"
+              else
+                echo "❌ Failed to push reasoning model"
+                exit 1
+              fi
+            else
+              echo "⏭️  Reasoning model already exists - skipping"
+            fi
+
+            # Embedding model (medium size)
+            if echo "$IMAGES_TO_PUSH" | grep -q "embedding"; then
+              if push_nim_to_ecr "nvcr.io/nim/nvidia/nv-embedqa-e5-v5:latest" "syntharbiter-nim-embedding"; then
+                echo "✅ Successfully pushed embedding model"
+              else
+                echo "❌ Failed to push embedding model"
+                exit 1
+              fi
+            else
+              echo "⏭️  Embedding model already exists - skipping"
+            fi
+
+            # Guardrails model (largest, process last)
+            if echo "$IMAGES_TO_PUSH" | grep -q "guardrails"; then
+              if push_nim_to_ecr "nvcr.io/nim/nvidia/llama-3.1-nemoguard-8b-content-safety:latest" "syntharbiter-nim-guardrails"; then
+                echo "✅ Successfully pushed guardrails model"
+              else
+                echo "❌ Failed to push guardrails model"
+                exit 1
+              fi
+            else
+              echo "⏭️  Guardrails model already exists - skipping"
+            fi
           fi
 
           echo "🎉 NIM ECR setup complete!"
