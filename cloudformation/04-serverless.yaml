@@ -137,6 +137,15 @@ Resources:
           RepositoryAuthConfig:
             RepositoryCredentialsProviderArn: !GetAtt SageMakerAuthLambda.Arn
       ExecutionRoleArn: !GetAtt SageMakerExecutionRole.Arn
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref SageMakerSecurityGroup
+        Subnets:
+          - Fn::Select:
+              - 0
+              - Fn::Split:
+                  - ','
+                  - Fn::ImportValue: !Sub '${NetworkStackName}-PrivateSubnetIds'
 
   NIMReasoningEndpointConfig:
     Type: AWS::SageMaker::EndpointConfig
@@ -167,6 +176,15 @@ Resources:
           RepositoryAuthConfig:
             RepositoryCredentialsProviderArn: !GetAtt SageMakerAuthLambda.Arn
       ExecutionRoleArn: !GetAtt SageMakerExecutionRole.Arn
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref SageMakerSecurityGroup
+        Subnets:
+          - Fn::Select:
+              - 0
+              - Fn::Split:
+                  - ','
+                  - Fn::ImportValue: !Sub '${NetworkStackName}-PrivateSubnetIds'
 
   NIMGuardrailsEndpointConfig:
     Type: AWS::SageMaker::EndpointConfig
@@ -197,6 +215,15 @@ Resources:
           RepositoryAuthConfig:
             RepositoryCredentialsProviderArn: !GetAtt SageMakerAuthLambda.Arn
       ExecutionRoleArn: !GetAtt SageMakerExecutionRole.Arn
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref SageMakerSecurityGroup
+        Subnets:
+          - Fn::Select:
+              - 0
+              - Fn::Split:
+                  - ','
+                  - Fn::ImportValue: !Sub '${NetworkStackName}-PrivateSubnetIds'
 
   NIMEvaluatorEndpointConfig:
     Type: AWS::SageMaker::EndpointConfig
@@ -227,6 +254,15 @@ Resources:
           RepositoryAuthConfig:
             RepositoryCredentialsProviderArn: !GetAtt SageMakerAuthLambda.Arn
       ExecutionRoleArn: !GetAtt SageMakerExecutionRole.Arn
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref SageMakerSecurityGroup
+        Subnets:
+          - Fn::Select:
+              - 0
+              - Fn::Split:
+                  - ','
+                  - Fn::ImportValue: !Sub '${NetworkStackName}-PrivateSubnetIds'
 
   NIMEmbeddingEndpointConfig:
     Type: AWS::SageMaker::EndpointConfig
