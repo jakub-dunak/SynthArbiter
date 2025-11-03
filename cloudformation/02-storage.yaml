@@ -6,6 +6,10 @@ Parameters:
     Type: String
     Default: ''
     Description: Name of the network stack to get VPC information from
+  EnvironmentName:
+    Type: String
+    Default: prod
+    Description: Environment name for resource naming
 
 Resources:
   # S3 Buckets
@@ -108,7 +112,7 @@ Resources:
   OpenSearchDomain:
     Type: AWS::OpenSearchService::Domain
     Properties:
-      DomainName: !Sub 'syntharbiter-opensearch-${AWS::AccountId}'
+      DomainName: !Sub 'syntharbiter-os-${EnvironmentName}'
       EngineVersion: OpenSearch_2.11
       ClusterConfig:
         InstanceType: t3.small.search
@@ -134,7 +138,7 @@ Resources:
             Principal:
               AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
             Action: 'es:*'
-            Resource: !Sub 'arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/syntharbiter-opensearch-${AWS::AccountId}/*'
+            Resource: !Sub 'arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/syntharbiter-os-${EnvironmentName}/*'
       VPCOptions:
         SubnetIds: !Split
           - ','
