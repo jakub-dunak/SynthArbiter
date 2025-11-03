@@ -139,7 +139,7 @@ Resources:
       EndpointConfigName: !Sub 'syntharbiter-nim-reasoning-config-${EnvironmentName}'
       ProductionVariants:
         - VariantName: primary
-          ModelName: !Ref NIMReasoningModel
+          ModelName: !Sub 'syntharbiter-nim-reasoning-${EnvironmentName}'
           InitialInstanceCount: 1
           InstanceType: ml.g5.2xlarge
           InitialVariantWeight: 1.0
@@ -174,7 +174,7 @@ Resources:
       EndpointConfigName: !Sub 'syntharbiter-nim-guardrails-config-${EnvironmentName}'
       ProductionVariants:
         - VariantName: primary
-          ModelName: !Ref NIMGuardrailsModel
+          ModelName: !Sub 'syntharbiter-nim-guardrails-${EnvironmentName}'
           InitialInstanceCount: 1
           InstanceType: ml.g5.2xlarge
           InitialVariantWeight: 1.0
@@ -209,7 +209,7 @@ Resources:
       EndpointConfigName: !Sub 'syntharbiter-nim-evaluator-config-${EnvironmentName}'
       ProductionVariants:
         - VariantName: primary
-          ModelName: !Ref NIMEvaluatorModel
+          ModelName: !Sub 'syntharbiter-nim-evaluator-${EnvironmentName}'
           InitialInstanceCount: 1
           InstanceType: ml.g5.2xlarge
           InitialVariantWeight: 1.0
