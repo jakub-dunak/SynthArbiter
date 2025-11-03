@@ -127,7 +127,7 @@ Resources:
         Enabled: true
       DomainEndpointOptions:
         EnforceHTTPS: true
-        TLSSecurityPolicy: Policy-Min-TLS-1-2-2019
+        TLSSecurityPolicy: Policy-Min-TLS-1-2-2019-07
       AdvancedOptions:
         'override_main_response_version': 'true'
         'knn': 'true'  # Enable k-NN for vector search
