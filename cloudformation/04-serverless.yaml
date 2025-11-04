@@ -608,8 +608,8 @@ Resources:
         - IpProtocol: tcp
           FromPort: 8080
           ToPort: 8080
-          SourceSecurityGroupId: !Ref SageMakerSecurityGroup
-          Description: Allow SageMaker health checks
+          CidrIp: 10.0.0.0/16
+          Description: Allow VPC health checks
       SecurityGroupEgress:
         - IpProtocol: tcp
           FromPort: 443
