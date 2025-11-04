@@ -14,7 +14,6 @@ graph TB
     subgraph "AI/ML Services - NIM Microservices"
         NIM_REASONING[NIM Reasoning<br/>Llama 3.1 Nemotron Nano 8B]
         NIM_GUARD[NIM Guardrails<br/>Content Safety]
-        NIM_EVAL[NIM Evaluator<br/>Quality Assessment]
         NIM_EMBED[NIM Embedding<br/>E5-v5 Vector Generation]
         OPENSEARCH[(OpenSearch<br/>Vector Database)]
         LAMBDA_ANALYZE[Lambda<br/>Analysis Orchestrator]
@@ -153,24 +152,71 @@ Deploy via consolidated GitHub Actions workflow:
 
 The workflow automatically handles:
 
-#### **Phase 1: Parameter Setup**
+#### **Phase 1: Parameter Setup** (optional)
 - ✅ Sync SSM parameters from `config/parameters.json`
-- ✅ Create/update NGC API key in Secrets Manager
+- ✅ Create NGC API key in Secrets Manager
 - ⏭️ Skippable with `skip_parameters: true`
 
-#### **Phase 2: Infrastructure Deployment**
-- ✅ Deploy 4 CloudFormation stacks (Network → Storage → Frontend → NIM)
+#### **Phase 2: NIM ECR Setup**
+- ✅ Create ECR repositories for all NIM models
+- ✅ Pull NIM images from NGC and push to ECR (one-time per environment)
+- ✅ Handle VPC access for ECR repositories
+
+#### **Phase 3: Infrastructure Deployment**
+- ✅ Deploy 4 layered CloudFormation stacks:
+  - **Network** (`syntharbiter-network-{env}`): VPC, subnets, security groups, NAT gateways
+  - **Storage** (`syntharbiter-storage-{env}`): OpenSearch domain for vector search
+  - **Frontend** (`syntharbiter-frontend-{env}`): Cognito user pools and client configuration
+  - **NIM Microservices** (`syntharbiter-nim-{env}`): SageMaker endpoints, Lambda functions, API Gateway, Amplify
 - ✅ Package and upload Lambda functions to S3
-- ✅ Configure Cognito authentication
-- ✅ Upload static website to S3 + deploy to Amplify
-- ✅ Output complete deployment URLs and resource IDs
+- ✅ Configure SageMaker endpoints with VPC access
+- ✅ Upload static website to S3 and deploy to Amplify
+
+#### **Phase 4: Output Summary**
+- **Amplify Website URL**: Automated S3-to-Amplify deployment
+- **API Gateway URL**: REST API endpoint
+- **Website S3 Bucket**: Source file storage location
+- **Cognito User Pool ID & Client ID**: Authentication configuration
+- **Infrastructure Stack Outputs**: Complete resource details from all 4 stacks
+
+### Deployment Workflow Diagram
+
+```mermaid
+graph TD
+    A[GitHub Actions<br/>Deploy SynthArbiter] --> B{skip_parameters?}
+    B -->|false| C[Phase 1: Parameter Setup<br/>SSM + Secrets Manager]
+    B -->|true| D[Phase 2: NIM ECR Setup<br/>Create repos + Pull/Push images]
+
+    C --> D
+    D --> E[Phase 3: Infrastructure Deployment]
+
+    E --> F[Network Stack<br/>syntharbiter-network-ENV]
+    F --> G[Storage Stack<br/>syntharbiter-storage-ENV]
+    G --> H[Frontend Stack<br/>syntharbiter-frontend-ENV]
+    H --> I[NIM Stack<br/>syntharbiter-nim-ENV]
+
+    I --> J[Lambda Packaging<br/>+ S3 Upload]
+    J --> K[Website Upload<br/>S3 → Amplify]
+    K --> L[Phase 4: Output Summary<br/>URLs + Stack Outputs]
+
+    style A fill:#e1f5fe
+    style C fill:#f3e5f5
+    style D fill:#fff3e0
+    style F fill:#e8f5e8
+    style G fill:#e8f5e8
+    style H fill:#e8f5e8
+    style I fill:#e8f5e8
+    style L fill:#fff9c4
+```
 
 ### 3. Access Your Application
 
-After deployment completes, the workflow will output:
-- **Website URL**: Amplify app URL (automated S3 deployment)
-- **API URL**: API Gateway endpoint
-- **Cognito Details**: User pool configuration
+After deployment completes, the workflow outputs all access information:
+- **Amplify Website URL**: Automated S3-to-Amplify deployment
+- **API Gateway URL**: REST API endpoint
+- **Website S3 Bucket**: Source file storage location
+- **Cognito User Pool ID & Client ID**: Authentication configuration
+- **Complete Infrastructure Stack Outputs**: From all 4 CloudFormation stacks
 
 ### Cost Optimization Features
 
