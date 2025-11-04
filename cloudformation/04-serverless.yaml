@@ -173,7 +173,7 @@ Resources:
       PrimaryContainer:
         Image: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/syntharbiter-nim-reasoning:latest'
         Environment:
-          NGC_API_KEY: !Sub '{{resolve:secretsmanager:/syntharbiter/nvidia-ngc-api-key:SecretString}}'
+          NGC_API_KEY: !Sub '{{resolve:secretsmanager:/syntharbiter/nvidia-ngc-api-key::password}}'
         ImageConfig:
           RepositoryAccessMode: Platform
       ExecutionRoleArn: !GetAtt SageMakerExecutionRole.Arn
@@ -197,6 +197,7 @@ Resources:
           InstanceType: ml.g5.2xlarge
           InitialVariantWeight: 1.0
           ContainerStartupHealthCheckTimeoutInSeconds: 1800
+      InferenceAmiVersion: al2-ami-sagemaker-inference-gpu-2
 
   NIMReasoningEndpoint:
     Type: AWS::SageMaker::Endpoint
@@ -212,7 +213,7 @@ Resources:
       PrimaryContainer:
         Image: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/syntharbiter-nim-guardrails:latest'
         Environment:
-          NGC_API_KEY: !Sub '{{resolve:secretsmanager:/syntharbiter/nvidia-ngc-api-key:SecretString}}'
+          NGC_API_KEY: !Sub '{{resolve:secretsmanager:/syntharbiter/nvidia-ngc-api-key::password}}'
         ImageConfig:
           RepositoryAccessMode: Platform
       ExecutionRoleArn: !GetAtt SageMakerExecutionRole.Arn
@@ -236,6 +237,7 @@ Resources:
           InstanceType: ml.g5.2xlarge
           InitialVariantWeight: 1.0
           ContainerStartupHealthCheckTimeoutInSeconds: 1800
+      InferenceAmiVersion: al2-ami-sagemaker-inference-gpu-2
 
   NIMGuardrailsEndpoint:
     Type: AWS::SageMaker::Endpoint
@@ -252,7 +254,7 @@ Resources:
       PrimaryContainer:
         Image: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/syntharbiter-nim-embedding:latest'
         Environment:
-          NGC_API_KEY: !Sub '{{resolve:secretsmanager:/syntharbiter/nvidia-ngc-api-key:SecretString}}'
+          NGC_API_KEY: !Sub '{{resolve:secretsmanager:/syntharbiter/nvidia-ngc-api-key::password}}'
         ImageConfig:
           RepositoryAccessMode: Platform
       ExecutionRoleArn: !GetAtt SageMakerExecutionRole.Arn
@@ -276,6 +278,7 @@ Resources:
           InstanceType: ml.g5.2xlarge
           InitialVariantWeight: 1.0
           ContainerStartupHealthCheckTimeoutInSeconds: 1800
+      InferenceAmiVersion: al2-ami-sagemaker-inference-gpu-2
 
   NIMEmbeddingEndpoint:
     Type: AWS::SageMaker::Endpoint
