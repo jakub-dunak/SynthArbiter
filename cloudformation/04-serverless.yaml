@@ -173,10 +173,7 @@ Resources:
       PrimaryContainer:
         Image: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/syntharbiter-nim-reasoning:latest'
         Environment:
-          NIM_MODEL_PROFILE: '09e2f8e68f78ce94bf79d15b40a21333cea5d09dbe01ede63f6c957f4fcfab7b'
-          NIM_HTTP_API_PORT: '8000'
-          NIM_GRPC_API_PORT: '8001'
-          NIM_METRICS_PORT: '8002'
+          NGC_API_KEY: !Sub '{{resolve:secretsmanager:/syntharbiter/nvidia-ngc-api-key:SecretString}}'
         ImageConfig:
           RepositoryAccessMode: Platform
       ExecutionRoleArn: !GetAtt SageMakerExecutionRole.Arn
@@ -184,11 +181,9 @@ Resources:
         SecurityGroupIds:
           - !Ref SageMakerSecurityGroup
         Subnets:
-          - Fn::Select:
-              - 0
-              - Fn::Split:
-                  - ','
-                  - Fn::ImportValue: !Sub '${NetworkStackName}-PrivateSubnetIds'
+          Fn::Split:
+            - ','
+            - Fn::ImportValue: !Sub '${NetworkStackName}-PrivateSubnetIds'
 
   NIMReasoningEndpointConfig:
     Type: AWS::SageMaker::EndpointConfig
@@ -201,6 +196,7 @@ Resources:
           InitialInstanceCount: 1
           InstanceType: ml.g5.2xlarge
           InitialVariantWeight: 1.0
+          ContainerStartupHealthCheckTimeoutInSeconds: 1800
 
   NIMReasoningEndpoint:
     Type: AWS::SageMaker::Endpoint
@@ -216,9 +212,7 @@ Resources:
       PrimaryContainer:
         Image: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/syntharbiter-nim-guardrails:latest'
         Environment:
-          NIM_HTTP_API_PORT: '8000'
-          NIM_GRPC_API_PORT: '8001'
-          NIM_METRICS_PORT: '8002'
+          NGC_API_KEY: !Sub '{{resolve:secretsmanager:/syntharbiter/nvidia-ngc-api-key:SecretString}}'
         ImageConfig:
           RepositoryAccessMode: Platform
       ExecutionRoleArn: !GetAtt SageMakerExecutionRole.Arn
@@ -226,11 +220,9 @@ Resources:
         SecurityGroupIds:
           - !Ref SageMakerSecurityGroup
         Subnets:
-          - Fn::Select:
-              - 0
-              - Fn::Split:
-                  - ','
-                  - Fn::ImportValue: !Sub '${NetworkStackName}-PrivateSubnetIds'
+          Fn::Split:
+            - ','
+            - Fn::ImportValue: !Sub '${NetworkStackName}-PrivateSubnetIds'
 
   NIMGuardrailsEndpointConfig:
     Type: AWS::SageMaker::EndpointConfig
@@ -243,6 +235,7 @@ Resources:
           InitialInstanceCount: 1
           InstanceType: ml.g5.2xlarge
           InitialVariantWeight: 1.0
+          ContainerStartupHealthCheckTimeoutInSeconds: 1800
 
   NIMGuardrailsEndpoint:
     Type: AWS::SageMaker::Endpoint
@@ -259,9 +252,7 @@ Resources:
       PrimaryContainer:
         Image: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/syntharbiter-nim-embedding:latest'
         Environment:
-          NIM_HTTP_API_PORT: '8000'
-          NIM_GRPC_API_PORT: '8001'
-          NIM_METRICS_PORT: '8002'
+          NGC_API_KEY: !Sub '{{resolve:secretsmanager:/syntharbiter/nvidia-ngc-api-key:SecretString}}'
         ImageConfig:
           RepositoryAccessMode: Platform
       ExecutionRoleArn: !GetAtt SageMakerExecutionRole.Arn
@@ -269,11 +260,9 @@ Resources:
         SecurityGroupIds:
           - !Ref SageMakerSecurityGroup
         Subnets:
-          - Fn::Select:
-              - 0
-              - Fn::Split:
-                  - ','
-                  - Fn::ImportValue: !Sub '${NetworkStackName}-PrivateSubnetIds'
+          Fn::Split:
+            - ','
+            - Fn::ImportValue: !Sub '${NetworkStackName}-PrivateSubnetIds'
 
   NIMEmbeddingEndpointConfig:
     Type: AWS::SageMaker::EndpointConfig
@@ -286,6 +275,7 @@ Resources:
           InitialInstanceCount: 1
           InstanceType: ml.g5.2xlarge
           InitialVariantWeight: 1.0
+          ContainerStartupHealthCheckTimeoutInSeconds: 1800
 
   NIMEmbeddingEndpoint:
     Type: AWS::SageMaker::Endpoint
@@ -463,6 +453,10 @@ Resources:
                   - !Sub 'arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:endpoint/${NIMEmbeddingEndpoint}'
               - Effect: Allow
                 Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/syntharbiter/nvidia-ngc-api-key*'
+              - Effect: Allow
+                Action:
                   - ecr:GetDownloadUrlForLayer
                   - ecr:BatchGetImage
                   - ecr:BatchCheckLayerAvailability
@@ -576,6 +570,10 @@ Resources:
                   - !Sub 'arn:aws:s3:::syntharbiter-${EnvironmentName}-*'
               - Effect: Allow
                 Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:/syntharbiter/nvidia-ngc-api-key*'
+              - Effect: Allow
+                Action:
                   - lambda:InvokeFunction
                 Resource: !GetAtt SageMakerAuthLambda.Arn
 
@@ -601,6 +599,17 @@ Resources:
       GroupDescription: Security group for SageMaker endpoints
       VpcId:
         Fn::ImportValue: !Sub '${NetworkStackName}-VpcId'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          SourceSecurityGroupId: !Ref LambdaSecurityGroup
+          Description: Allow Lambda to access NIM HTTP API
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          SourceSecurityGroupId: !Ref SageMakerSecurityGroup
+          Description: Allow SageMaker health checks
       SecurityGroupEgress:
         - IpProtocol: tcp
           FromPort: 443
