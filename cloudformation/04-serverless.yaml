@@ -197,7 +197,7 @@ Resources:
           InstanceType: ml.g5.2xlarge
           InitialVariantWeight: 1.0
           ContainerStartupHealthCheckTimeoutInSeconds: 1800
-      InferenceAmiVersion: al2-ami-sagemaker-inference-gpu-2
+          InferenceAmiVersion: al2-ami-sagemaker-inference-gpu-2
 
   NIMReasoningEndpoint:
     Type: AWS::SageMaker::Endpoint
@@ -237,7 +237,7 @@ Resources:
           InstanceType: ml.g5.2xlarge
           InitialVariantWeight: 1.0
           ContainerStartupHealthCheckTimeoutInSeconds: 1800
-      InferenceAmiVersion: al2-ami-sagemaker-inference-gpu-2
+          InferenceAmiVersion: al2-ami-sagemaker-inference-gpu-2
 
   NIMGuardrailsEndpoint:
     Type: AWS::SageMaker::Endpoint
@@ -278,7 +278,7 @@ Resources:
           InstanceType: ml.g5.2xlarge
           InitialVariantWeight: 1.0
           ContainerStartupHealthCheckTimeoutInSeconds: 1800
-      InferenceAmiVersion: al2-ami-sagemaker-inference-gpu-2
+          InferenceAmiVersion: al2-ami-sagemaker-inference-gpu-2
 
   NIMEmbeddingEndpoint:
     Type: AWS::SageMaker::Endpoint
